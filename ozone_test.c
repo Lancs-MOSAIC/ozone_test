@@ -175,7 +175,9 @@ rtlsdr_dev_t *init_dongle(void)
     return dev;
 }
 
-void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf)
+void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
+		   fftwf_plan fplan, fftwf_complex *fftin, \
+		   fftwf_complex *fftout)
 {
   float f;
   int nspec, n, k, idx;
@@ -209,23 +211,26 @@ void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf)
 }
 
 
-int init_fft(void)
+fftwf_plan init_fft(fftwf_complex **inbuf, fftwf_complex **outbuf)
 {
-  fftin = fftwf_alloc_complex(FFT_LEN);
-  if(fftin == NULL) {
+  fftwf_plan fplan;
+  
+  *inbuf = fftwf_alloc_complex(FFT_LEN);
+  if(*inbuf == NULL) {
     fprintf(stderr, "Failed to allocate FFT input buffer\n");
-    return -1;
+    return NULL;
   }
 
-  fftout = fftwf_alloc_complex(FFT_LEN);
-  if(fftout == NULL) {
+  *outbuf = fftwf_alloc_complex(FFT_LEN);
+  if(*outbuf == NULL) {
    fprintf(stderr, "Failed to allocate FFT output buffer\n");
-   return -1;
+   return NULL;
   }
 
-  fplan = fftwf_plan_dft_1d(FFT_LEN, fftin, fftout, FFTW_FORWARD, FFTW_MEASURE);
+  fplan = fftwf_plan_dft_1d(FFT_LEN, *inbuf, *outbuf, FFTW_FORWARD, \
+			    FFTW_MEASURE);
 
-  return 0;
+  return fplan;
 }
 
 void init_convtab(void)
@@ -279,7 +284,7 @@ int main(void)
 
   init_convtab();
 
-  if (init_fft())
+  if ((fplan = init_fft(&fftin, &fftout)) == NULL)
     return 1;
 
   if ((dev = init_dongle()) == NULL)
@@ -310,7 +315,7 @@ int main(void)
     set_cal_state(calfp, 0);
 
     fprintf(stderr, "  Calculating spectrum... ");
-    calc_spectrum(data_buf, READ_SIZE, spec_buf);
+    calc_spectrum(data_buf, READ_SIZE, spec_buf, fplan, fftin, fftout);
     fprintf(stderr, "Done.\n");
 
     if (write_data) {
@@ -346,7 +351,8 @@ int main(void)
       }
 
       fprintf(stderr, "  Calculating spectrum... ");
-      calc_spectrum(data_buf, NUM_BLOCKS * READ_SIZE, spec_buf);
+      calc_spectrum(data_buf, NUM_BLOCKS * READ_SIZE, spec_buf, fplan, \
+		    fftin, fftout);
       fprintf(stderr, "Done.\n");
 
       if (write_data) {
@@ -378,7 +384,8 @@ int main(void)
       }
 
       fprintf(stderr, "  Calculating spectrum... ");
-      calc_spectrum(data_buf, NUM_BLOCKS * READ_SIZE, spec_buf);
+      calc_spectrum(data_buf, NUM_BLOCKS * READ_SIZE, spec_buf, fplan, \
+		    fftin, fftout);
       fprintf(stderr, "Done.\n");
 
       if (write_data) {
