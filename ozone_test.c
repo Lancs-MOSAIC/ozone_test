@@ -297,6 +297,8 @@ void *comp_thread(void *ptarg)
 
   while (1) {
 
+    /* Check input queue and wait if nothing to process */
+
     r = pthread_mutex_lock(&in_queue_mutex);
     if (r != 0) {
       fprintf(stderr, "  comp_thread: pthread_mutex_lock: %s\n", strerror(r));
@@ -312,13 +314,13 @@ void *comp_thread(void *ptarg)
       }
     }
 
-    in_queue_len--;
-
     r = pthread_mutex_unlock(&in_queue_mutex);
     if (r != 0) {
       fprintf(stderr, "  comp_thread: pthread_mutex_unlock: %s\n", strerror(r));
       return NULL;
     }
+
+    /* Process a block of signal */
 
     fprintf(stderr, "  comp_thread: calculating spectrum (%d)\n", 
 	    in_queue_out_ptr);
@@ -329,6 +331,30 @@ void *comp_thread(void *ptarg)
 
     in_queue_out_ptr = (in_queue_out_ptr + 1) % MAX_IN_QUEUE_LEN;
     out_queue_in_ptr = (out_queue_in_ptr + 1) % (NUM_SIG_SPEC * 2);
+
+    /* Indicate that data has been removed from input queue and
+       added to output queue
+    */
+
+    r = pthread_mutex_lock(&in_queue_mutex);
+    if (r != 0) {
+      fprintf(stderr, "  comp_thread: pthread_mutex_lock: %s\n", strerror(r));
+      return NULL;
+    }
+
+    in_queue_len--;
+
+    r = pthread_mutex_unlock(&in_queue_mutex);
+    if (r != 0) {
+      fprintf(stderr, "  comp_thread: pthread_mutex_unlock: %s\n", strerror(r));
+      return NULL;
+    }
+
+    r = pthread_cond_signal(&in_queue_cond);
+    if (r != 0) {
+      fprintf(stderr, "pthread_cond_signal: %s\n", strerror(r));
+      return NULL;
+    }
 
     r = pthread_mutex_lock(&out_queue_mutex);
     if (r != 0) {
@@ -467,6 +493,30 @@ int main(void)
 
       rtlsdr_reset_buffer(dev); /* flush any cal signal away */
 
+      /* Check for space in queue, wait if full */
+
+      r = pthread_mutex_lock(&in_queue_mutex);
+      if (r != 0) {
+	fprintf(stderr, "pthread_mutex_lock: %s\n", strerror(r));
+	return 1;
+      }
+
+      while (in_queue_len == MAX_IN_QUEUE_LEN) {
+	fprintf(stderr, "main_thread: waiting for space in queue\n");
+	r = pthread_cond_wait(&in_queue_cond, &in_queue_mutex);
+	if (r != 0) {
+	  fprintf(stderr, "  main_thread: pthread_cond_wait(in_queue): %s\n",
+		  strerror(r));
+	  return 1;
+	}
+      }
+
+      r = pthread_mutex_unlock(&in_queue_mutex);
+      if (r != 0) {
+	fprintf(stderr, "pthread_mutex_unlock: %s\n", strerror(r));
+	return 1;
+      }
+
       for(n = 0; n < NUM_BLOCKS; n++) {
 
 	r = rtlsdr_read_sync(dev, &data_buf[in_queue_in_ptr * SIG_SIZE
@@ -502,21 +552,9 @@ int main(void)
 	return 1;
       }
       
-      
 
-      if (in_queue_len >= MAX_IN_QUEUE_LEN)
-	fprintf(stderr, "WARNING: buffer overrun!\n");
-  
     }
 
-    /*
-    r = pthread_cond_signal(&in_queue_cond);
-    if (r != 0) {
-      fprintf(stderr, "pthread_cond_signal: %s\n", strerror(r));
-      return 1;
-    }
-    */
-    
 
     /* Read signal spectra from queue and store them */
 
