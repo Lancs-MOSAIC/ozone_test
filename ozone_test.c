@@ -254,8 +254,12 @@ void init_convtab(void)
 {
   int n;
 
+  /* Convert 8-bit offset sample to floating point
+   * with full-scale = 1
+   */
+
   for (n = 0; n < 256; n++)
-    convtab[n] = (float)n - 127.0;
+    convtab[n] = ((float)n - 127.0) / 127.0;
 }
 
 double find_freq_error(float *calspec, double samplerate, double centfreq,
@@ -614,7 +618,8 @@ int main(void)
     /* normalise spectra */
     for (int k =0; k < 2; k++) {
       for (int n = 0; n < FFT_LEN; n++) {
-	spec_out_buf[k * FFT_LEN + n] /= (float)spec_out_int[k];
+	spec_out_buf[k * FFT_LEN + n] /= 
+		((float)spec_out_int[k] * (float)FFT_LEN * (float)FFT_LEN);
       }
     }
 
