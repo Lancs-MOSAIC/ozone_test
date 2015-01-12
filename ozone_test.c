@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <sched.h>
 #include <sys/mman.h>
+#include <stdint.h>
 
 #include "rtl-sdr.h"
 #include <fftw3.h>
@@ -31,9 +32,11 @@ int dongle_debug = 1;
 #define MAX_IN_QUEUE_LEN 3
 
 uint8_t data_buf[SIG_SIZE * MAX_IN_QUEUE_LEN];
+int data_buf_sig_len[MAX_IN_QUEUE_LEN];
 uint8_t cal_data_buf[READ_SIZE];
 float cal_spec_buf[FFT_LEN];
 float sig_spec_buf[FFT_LEN * NUM_SIG_SPEC * 2];
+int sig_spec_int[NUM_SIG_SPEC * 2];
 float convtab[256];
 
 pthread_mutex_t in_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -187,7 +190,7 @@ rtlsdr_dev_t *init_dongle(void)
 }
 
 void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
-		   fftwf_plan fplan, fftwf_complex *fftin, \
+		   int *num_spec, fftwf_plan fplan, fftwf_complex *fftin, \
 		   fftwf_complex *fftout)
 {
   float f;
@@ -218,6 +221,9 @@ void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
       spec_buf[k] += fftout[k][0] * fftout[k][0] + fftout[k][1] * fftout[k][1];
 
   }
+
+  if (num_spec != NULL)
+    *num_spec = nspec;
 
 }
 
@@ -325,9 +331,10 @@ void *comp_thread(void *ptarg)
     fprintf(stderr, "  comp_thread: calculating spectrum (%d)\n", 
 	    in_queue_out_ptr);
 
-    calc_spectrum(&data_buf[in_queue_out_ptr * SIG_SIZE], SIG_SIZE, \
+    calc_spectrum(&data_buf[in_queue_out_ptr * SIG_SIZE], \
+		  data_buf_sig_len[in_queue_out_ptr],     \
 		  &sig_spec_buf[out_queue_in_ptr * FFT_LEN], \
-		  cfplan, cfftin, cfftout);
+		  &sig_spec_int[out_queue_in_ptr], cfplan, cfftin, cfftout);
 
     in_queue_out_ptr = (in_queue_out_ptr + 1) % MAX_IN_QUEUE_LEN;
     out_queue_in_ptr = (out_queue_in_ptr + 1) % (NUM_SIG_SPEC * 2);
@@ -399,6 +406,9 @@ int main(void)
   fftwf_complex *fftin;
   fftwf_complex *fftout;
   fftwf_plan fplan;
+  float spec_out_buf[2 * FFT_LEN];
+  int spec_out_int[2];
+  uint64_t time_stamp;
 
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
@@ -439,6 +449,8 @@ int main(void)
 
   while (1) {
 
+    time_stamp = (uint64_t)time(NULL);
+
     set_frequency(dev, CALRXFREQ);
 
     memset(cal_data_buf, 0, sizeof(cal_data_buf)); 
@@ -454,18 +466,14 @@ int main(void)
     if (n_read != READ_SIZE)
       fprintf(stderr, "WARNING: received wrong number of samples (%d)\n", \
 	      n_read);
-
+  
     fprintf(stderr, "  Calibrator off\n");
     set_cal_state(calfp, 0);
 
     fprintf(stderr, "  Calculating spectrum... ");
-    calc_spectrum(cal_data_buf, READ_SIZE, cal_spec_buf, fplan, fftin, fftout);
+    calc_spectrum(cal_data_buf, READ_SIZE, cal_spec_buf, NULL, \
+		  fplan, fftin, fftout);
     fprintf(stderr, "Done.\n");
-
-    if (write_data) {
-      if (fwrite(cal_spec_buf, sizeof(cal_spec_buf), 1, stdout) != 1)
-	fprintf(stderr, "Error writing data to stdout\n");
-    }
 
     freq_err = find_freq_error(cal_spec_buf, SAMPLERATE, CALRXFREQ, CALFREQ);
 
@@ -517,6 +525,8 @@ int main(void)
 	return 1;
       }
 
+      data_buf_sig_len[in_queue_in_ptr] = 0;
+
       for(n = 0; n < NUM_BLOCKS; n++) {
 
 	r = rtlsdr_read_sync(dev, &data_buf[in_queue_in_ptr * SIG_SIZE
@@ -526,7 +536,9 @@ int main(void)
 	  fprintf(stderr, "WARNING: rtlsdr_read_sync() failed\n");
 	if (n_read != READ_SIZE)
 	  fprintf(stderr, "WARNING: received wrong number of samples (%d)\n", \
-		  n_read);    
+		  n_read);
+
+	data_buf_sig_len[in_queue_in_ptr] += n_read;
 
       }
 
@@ -555,6 +567,8 @@ int main(void)
 
     }
 
+    memset(spec_out_buf, 0, 2 * FFT_LEN * sizeof(float));
+    memset(spec_out_int, 0, 2 * sizeof(int));
 
     /* Read signal spectra from queue and store them */
 
@@ -583,16 +597,45 @@ int main(void)
 	return 1;
       }
 
-      if (write_data) {
+      /* integrate spectra */
 
-	if (fwrite(sig_spec_buf + FFT_LEN * out_queue_out_ptr,
-		   FFT_LEN * sizeof(float), 1, stdout) != 1)
-	  fprintf(stderr, "WARNING: could not write out data\n");
-
+      int n = scount % 2;
+      spec_out_int[n] += sig_spec_int[out_queue_out_ptr];
+      for (int k = 0; k < FFT_LEN; k++) {
+	spec_out_buf[n * FFT_LEN + k] += \
+	  sig_spec_buf[FFT_LEN * out_queue_out_ptr + k];
       }
 
       out_queue_out_ptr = (out_queue_out_ptr + 1) % (2 * NUM_SIG_SPEC);
 
+
+    }
+
+    /* normalise spectra */
+    for (int k =0; k < 2; k++) {
+      for (int n = 0; n < FFT_LEN; n++) {
+	spec_out_buf[k * FFT_LEN + n] /= (float)spec_out_int[k];
+      }
+    }
+
+    if (write_data) {
+
+      if (fwrite(&time_stamp, sizeof(time_stamp), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out timestamp\n");
+
+      if (fwrite(&freq_err, sizeof(freq_err), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out freq err\n");
+
+      if (fwrite(spec_out_int, 2 * sizeof(int), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out int factors\n");
+
+      if (fwrite(cal_spec_buf, sizeof(cal_spec_buf), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out cal spectrum\n");
+
+      if (fwrite(spec_out_buf, 2 * FFT_LEN * sizeof(float), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out sig spectra\n");
+
+      fflush(stdout);
 
     }
 
