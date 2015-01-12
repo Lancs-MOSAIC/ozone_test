@@ -198,7 +198,7 @@ void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
 
   f = (float)sig_len / 2.0 / (float)FFT_LEN;
   if (f != floorf(f))
-    fprintf(stderr, "WARNING: signal length not divisble by FFT length\n");
+    fprintf(stderr, "WARNING: signal length not divisible by FFT length\n");
 
   nspec = (int)floorf(f);
 
@@ -413,6 +413,7 @@ int main(void)
   float spec_out_buf[2 * FFT_LEN];
   int spec_out_int[2];
   uint64_t time_stamp;
+  int data_buf_idx;
 
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
@@ -456,8 +457,10 @@ int main(void)
     time_stamp = (uint64_t)time(NULL);
 
     set_frequency(dev, CALRXFREQ);
+    
+    /* Clear signal data buffer: 127 corresponds to zero signal */
 
-    memset(cal_data_buf, 0, sizeof(cal_data_buf)); 
+    memset(cal_data_buf, 127, sizeof(cal_data_buf)); 
 
     fprintf(stderr, "  Calibrator on\n");
     set_cal_state(calfp, 1);
@@ -501,7 +504,9 @@ int main(void)
       fprintf(stderr, "  main_thread: recording signal %d, %d\n", scount,
 	      in_queue_in_ptr);
 
-      memset(&data_buf[in_queue_in_ptr * SIG_SIZE], 0, SIG_SIZE);
+      /* Clear signal data buffer: 127 corresponds to zero signal */
+
+      memset(&data_buf[in_queue_in_ptr * SIG_SIZE], 127, SIG_SIZE);
 
       rtlsdr_reset_buffer(dev); /* flush any cal signal away */
 
@@ -531,17 +536,23 @@ int main(void)
 
       data_buf_sig_len[in_queue_in_ptr] = 0;
 
+      data_buf_idx = 0;
+
       for(n = 0; n < NUM_BLOCKS; n++) {
 
 	r = rtlsdr_read_sync(dev, &data_buf[in_queue_in_ptr * SIG_SIZE
-					    + n * READ_SIZE],
-			     READ_SIZE, &n_read);
+			    + data_buf_idx], READ_SIZE, &n_read);
 	if (r < 0)
 	  fprintf(stderr, "WARNING: rtlsdr_read_sync() failed\n");
 	if (n_read != READ_SIZE)
 	  fprintf(stderr, "WARNING: received wrong number of samples (%d)\n", \
 		  n_read);
+	if ((n_read % 2) != 0) {
+	  fprintf(stderr, "WARNING: odd number of samples received!\n");
+	  n_read++; /* preserve real/imaginary alignment */
+	}
 
+	data_buf_idx += n_read;
 	data_buf_sig_len[in_queue_in_ptr] += n_read;
 
       }
