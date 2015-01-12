@@ -504,10 +504,6 @@ int main(void)
       fprintf(stderr, "  main_thread: recording signal %d, %d\n", scount,
 	      in_queue_in_ptr);
 
-      /* Clear signal data buffer: 127 corresponds to zero signal */
-
-      memset(&data_buf[in_queue_in_ptr * SIG_SIZE], 127, SIG_SIZE);
-
       rtlsdr_reset_buffer(dev); /* flush any cal signal away */
 
       /* Check for space in queue, wait if full */
@@ -533,6 +529,10 @@ int main(void)
 	fprintf(stderr, "pthread_mutex_unlock: %s\n", strerror(r));
 	return 1;
       }
+
+      /* Clear signal data buffer: 127 corresponds to zero signal */
+
+      memset(&data_buf[in_queue_in_ptr * SIG_SIZE], 127, SIG_SIZE);
 
       data_buf_sig_len[in_queue_in_ptr] = 0;
 
