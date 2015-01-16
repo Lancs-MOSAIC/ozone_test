@@ -7,9 +7,12 @@
 #include <sched.h>
 #include <sys/mman.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "rtl-sdr.h"
 #include <fftw3.h>
+
+# define M_PI               3.14159265358979323846
 
 #define GPIOPATH "/sys/class/gpio/gpio60"
 #define GPIODIR "/direction"
@@ -189,8 +192,9 @@ rtlsdr_dev_t *init_dongle(void)
     return dev;
 }
 
-void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
-		   int *num_spec, fftwf_plan fplan, fftwf_complex *fftin, \
+void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf,
+		   int *num_spec, float *win,
+		   fftwf_plan fplan, fftwf_complex *fftin,
 		   fftwf_complex *fftout)
 {
   float f;
@@ -209,8 +213,13 @@ void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf, \
     /* Copy signal into FFT buffer, converting format */
     for (k = 0; k < FFT_LEN; k++) {
       idx = 2 * (FFT_LEN * n + k);
-      fftin[k][0] = convtab[signal[idx]];
-      fftin[k][1] = convtab[signal[idx + 1]];
+      if (win == NULL) {
+	fftin[k][0] = convtab[signal[idx]];
+	fftin[k][1] = convtab[signal[idx + 1]];
+      } else {
+	fftin[k][0] = win[k] * convtab[signal[idx]];
+	fftin[k][1] = win[k] * convtab[signal[idx + 1]];
+      }
     }
 
     fftwf_execute(fplan);
@@ -260,6 +269,19 @@ void init_convtab(void)
 
   for (n = 0; n < 256; n++)
     convtab[n] = ((float)n - 127.0) / 127.0;
+}
+
+void init_window(float *win, int len)
+{
+  int n;
+  float t;
+
+  for (n = 0; n < len; n++) {
+
+    t = 2 * M_PI * ((float)n - (float)(len-1) / 2.0) / (float)len;
+    win[n] = 1.0 + 2.0*sqrt(5.0/9.0)*cos(t);
+  }
+
 }
 
 double find_freq_error(float *calspec, double samplerate, double centfreq,
@@ -338,7 +360,8 @@ void *comp_thread(void *ptarg)
     calc_spectrum(&data_buf[in_queue_out_ptr * SIG_SIZE], \
 		  data_buf_sig_len[in_queue_out_ptr],     \
 		  &sig_spec_buf[out_queue_in_ptr * FFT_LEN], \
-		  &sig_spec_int[out_queue_in_ptr], cfplan, cfftin, cfftout);
+		  &sig_spec_int[out_queue_in_ptr], NULL,
+		  cfplan, cfftin, cfftout);
 
     in_queue_out_ptr = (in_queue_out_ptr + 1) % MAX_IN_QUEUE_LEN;
     out_queue_in_ptr = (out_queue_in_ptr + 1) % (NUM_SIG_SPEC * 2);
@@ -414,12 +437,21 @@ int main(void)
   int spec_out_int[2];
   uint64_t time_stamp;
   int data_buf_idx;
+  float *fft_win;
 
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
     fprintf(stderr, "stdout is a terminal, not writing data\n");
 
   init_convtab();
+
+  fft_win = malloc(FFT_LEN * sizeof(float));
+  if (fft_win == NULL) {
+    fprintf(stderr, "Failed to allocate space for FFT window\n");
+    return 1;
+  }
+
+  init_window(fft_win, FFT_LEN);
 
   if ((fplan = init_fft(&fftin, &fftout)) == NULL)
     return 1;
@@ -479,7 +511,7 @@ int main(void)
 
     fprintf(stderr, "  Calculating spectrum... ");
     calc_spectrum(cal_data_buf, READ_SIZE, cal_spec_buf, NULL, \
-		  fplan, fftin, fftout);
+		  fft_win, fplan, fftin, fftout);
     fprintf(stderr, "Done.\n");
 
     freq_err = find_freq_error(cal_spec_buf, SAMPLERATE, CALRXFREQ, CALFREQ);
