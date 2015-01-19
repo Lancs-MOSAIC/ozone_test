@@ -288,8 +288,8 @@ double find_freq_error(float *calspec, double samplerate, double centfreq,
 		       double calfreq)
 {
   float max_pow = 0;
-  int max_idx, n;
-  double freqerr;
+  int max_idx, max_idx_p, max_idx_m, n;
+  double freqerr, f_interp;
 
   max_idx = 0;
 
@@ -300,13 +300,29 @@ double find_freq_error(float *calspec, double samplerate, double centfreq,
       max_idx = n;
     }
 
-  if (max_idx >= FFT_LEN / 2)
-    max_idx = max_idx - FFT_LEN;
+  /* quadratic interpolation of peak frequency */
 
-  freqerr = (double)max_idx * samplerate / (double)FFT_LEN;
+  max_idx_p = (max_idx + 1) % FFT_LEN;
+  max_idx_m = max_idx - 1;
+  if (max_idx_m < 0)
+    max_idx_m = max_idx_m + FFT_LEN;
+
+  f_interp = 0.5 * (calspec[max_idx_m] - calspec[max_idx_p]) /
+    (calspec[max_idx_m] - 2*calspec[max_idx] + calspec[max_idx_p]);
+
+  /* convert from FFT bin to actual frequency */
+
+  freqerr = (double)max_idx;
+
+  if (freqerr >= FFT_LEN / 2)
+    freqerr = freqerr - (double)FFT_LEN;
+
+  freqerr += f_interp;
+  freqerr = freqerr * samplerate / (double)FFT_LEN;
   freqerr = (centfreq + freqerr) - calfreq;
 
-  fprintf(stderr, "  Frequency error %.0f Hz\n", freqerr);
+  fprintf(stderr, "  Frequency error %.0f Hz (f_interp = %.2f)\n",
+	  freqerr, f_interp);
 
   return freqerr;
 }
