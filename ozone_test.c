@@ -15,6 +15,7 @@
 #include "rtldongle.h"
 #include "common.h"
 #include "signalproc.h"
+#include "compthread.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
 #define HEADER_VERSION 1
@@ -46,118 +47,6 @@ pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
 int out_queue_len = 0;
 
 
-
-
-void *comp_thread(void *ptarg)
-{
-  fftwf_plan cfplan;
-  fftwf_complex *cfftin, *cfftout;
-  int r, in_queue_out_ptr = 0, out_queue_in_ptr = 0;
-
-  fprintf(stderr, "  comp_thread: computation thread alive\n");
-
-  cfplan = init_fft(&cfftin, &cfftout);
-  if (cfplan == NULL) {
-    fprintf(stderr, "  comp_thread: failed to initialise FFT\n");
-    return NULL;
-  }
-
-
-
-  while (1) {
-
-    /* Check input queue and wait if nothing to process */
-
-    r = pthread_mutex_lock(&in_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_lock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    while (in_queue_len == 0) {
-      fprintf(stderr, "  comp_thread: waiting for data\n");
-      r = pthread_cond_wait(&in_queue_cond, &in_queue_mutex);
-      if (r != 0) {
-	fprintf(stderr, "  comp_thread: pthread_cond_wait: %s\n", strerror(r));
-	return NULL;
-      }
-    }
-
-    r = pthread_mutex_unlock(&in_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_unlock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    /* Process a block of signal */
-
-    fprintf(stderr, "  comp_thread: calculating spectrum (%d)\n", 
-	    in_queue_out_ptr);
-
-    calc_spectrum(&data_buf[in_queue_out_ptr * SIG_SIZE], \
-		  data_buf_sig_len[in_queue_out_ptr],     \
-		  &sig_spec_buf[out_queue_in_ptr * FFT_LEN], \
-		  &sig_spec_int[out_queue_in_ptr], NULL,
-		  cfplan, cfftin, cfftout);
-
-    in_queue_out_ptr = (in_queue_out_ptr + 1) % MAX_IN_QUEUE_LEN;
-    out_queue_in_ptr = (out_queue_in_ptr + 1) % (NUM_SIG_SPEC * 2);
-
-    /* Indicate that data has been removed from input queue and
-       added to output queue
-    */
-
-    r = pthread_mutex_lock(&in_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_lock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    in_queue_len--;
-
-    r = pthread_mutex_unlock(&in_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_unlock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    r = pthread_cond_signal(&in_queue_cond);
-    if (r != 0) {
-      fprintf(stderr, "pthread_cond_signal: %s\n", strerror(r));
-      return NULL;
-    }
-
-    r = pthread_mutex_lock(&out_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_lock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    out_queue_len++;
-
-    r = pthread_mutex_unlock(&out_queue_mutex);
-    if (r != 0) {
-      fprintf(stderr, "  comp_thread: pthread_mutex_unlock: %s\n", strerror(r));
-      return NULL;
-    }
-
-    r = pthread_cond_signal(&out_queue_cond);
-    if (r != 0) {
-      fprintf(stderr, "pthread_cond_signal: %s\n", strerror(r));
-      return NULL;
-    }
-
-  }
-
-  fftwf_free(cfftin);
-  fftwf_free(cfftout);
-  fftwf_destroy_plan(cfplan);
-
-  return NULL;
-
-}
-
-
 int main(void)
 {
   FILE *calfp;
@@ -166,6 +55,7 @@ int main(void)
   double freq_err;
   uint32_t line_rx_freq;
   pthread_t cthread;
+  struct comp_thread_context ctx;
   int in_queue_in_ptr = 0, out_queue_out_ptr = 0;
   fftwf_complex *fftin;
   fftwf_complex *fftout;
@@ -199,7 +89,23 @@ int main(void)
   if ((calfp = init_cal_control()) == NULL)
     return 1;
 
-  r = pthread_create(&cthread, NULL, comp_thread, NULL);
+  /* Create computational thread */
+
+  ctx.in_queue_mutex_p = &in_queue_mutex;
+  ctx.in_queue_cond_p = &in_queue_cond;
+  ctx.in_queue_len_p = &in_queue_len;
+  ctx.out_queue_mutex_p = &out_queue_mutex;
+  ctx.out_queue_cond_p = &out_queue_cond;
+  ctx.out_queue_len = &out_queue_len;
+  ctx.max_in_queue_len = MAX_IN_QUEUE_LEN;
+  ctx.sig_size = SIG_SIZE;
+  ctx.data_buf = data_buf;
+  ctx.data_buf_sig_len = data_buf_sig_len;
+  ctx.num_sig_spec = NUM_SIG_SPEC;
+  ctx.sig_spec_buf = sig_spec_buf;
+  ctx.sig_spec_int = sig_spec_int;
+  
+  r = pthread_create(&cthread, NULL, comp_thread, (void *)&ctx);
   if (r != 0) {
     fprintf(stderr, "pthread_create(): %s", strerror(r));
     return 1;
