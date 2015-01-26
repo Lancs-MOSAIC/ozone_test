@@ -18,20 +18,23 @@
 #define GPIODIR "/direction"
 #define GPIOVAL "/value"
 
-#define SAMPLERATE 2500000
+#define HEADER_MAGIC 0xa9e4b8b4
+#define HEADER_VERSION 1
+
+#define SAMPLERATE 1800000
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
 //#define LINEFREQ CALFREQ
-#define CALRXFREQ 1319000000
+#define CALRXFREQ CALFREQ
 
 
 int dongle_debug = 1;
 
 #define READ_SIZE (16384 * 256)
-#define NUM_BLOCKS 5
+#define NUM_BLOCKS 4
 #define SIG_SIZE (NUM_BLOCKS * READ_SIZE)
 #define NUM_SIG_SPEC 8
-#define FFT_LEN 1024
+#define FFT_LEN 768
 #define MAX_IN_QUEUE_LEN 3
 
 uint8_t data_buf[SIG_SIZE * MAX_IN_QUEUE_LEN];
@@ -684,6 +687,26 @@ int main(void)
 
     if (write_data) {
 
+      uint32_t hdr_magic = HEADER_MAGIC;
+      uint32_t samp_rate = SAMPLERATE;
+      uint32_t fft_len = FFT_LEN;
+      uint32_t hdr_version = HEADER_VERSION;
+
+      if (fwrite(&hdr_magic, sizeof(hdr_magic), 1, stdout) != 1)
+        fprintf(stderr, "WARNING: could not write out magic value\n");
+
+      if (fwrite(&hdr_version, sizeof(hdr_version), 1, stdout) != 1)
+        fprintf(stderr, "WARNING: could not write out header version\n");
+
+      uint32_t rec_len = 3 * FFT_LEN * sizeof(float) + sizeof(hdr_magic)
+	                 + sizeof(hdr_version) + sizeof(rec_len)
+                         + sizeof(time_stamp) + sizeof(freq_err)
+                         + 2 * sizeof(int) + sizeof(samp_rate)
+	                 + sizeof(fft_len);
+
+      if (fwrite(&rec_len, sizeof(rec_len), 1, stdout) != 1)
+        fprintf(stderr, "WARNING: could not write out record length\n");
+
       if (fwrite(&time_stamp, sizeof(time_stamp), 1, stdout) != 1)
 	fprintf(stderr, "WARNING: could not write out timestamp\n");
 
@@ -692,6 +715,12 @@ int main(void)
 
       if (fwrite(spec_out_int, 2 * sizeof(int), 1, stdout) != 1)
 	fprintf(stderr, "WARNING: could not write out int factors\n");
+
+      if (fwrite(&samp_rate, sizeof(samp_rate), 1, stdout) != 1)
+        fprintf(stderr, "WARNING: could not write out sample rate\n");
+
+      if (fwrite(&fft_len, sizeof(fft_len), 1, stdout) != 1)
+        fprintf(stderr, "WARNING: could not write out FFT length\n");
 
       if (fwrite(cal_spec_buf, sizeof(cal_spec_buf), 1, stdout) != 1)
 	fprintf(stderr, "WARNING: could not write out cal spectrum\n");
