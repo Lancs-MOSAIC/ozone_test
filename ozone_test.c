@@ -11,30 +11,23 @@
 
 #include "rtl-sdr.h"
 #include <fftw3.h>
-
-# define M_PI               3.14159265358979323846
-
-#define GPIOPATH "/sys/class/gpio/gpio60"
-#define GPIODIR "/direction"
-#define GPIOVAL "/value"
+#include "calcontrol.h"
+#include "rtldongle.h"
+#include "common.h"
+#include "signalproc.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
 #define HEADER_VERSION 1
 
-#define SAMPLERATE 1800000
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
 //#define LINEFREQ CALFREQ
 #define CALRXFREQ CALFREQ
 
-
-int dongle_debug = 1;
-
 #define READ_SIZE (16384 * 256)
 #define NUM_BLOCKS 4
 #define SIG_SIZE (NUM_BLOCKS * READ_SIZE)
 #define NUM_SIG_SPEC 8
-#define FFT_LEN 768
 #define MAX_IN_QUEUE_LEN 3
 
 uint8_t data_buf[SIG_SIZE * MAX_IN_QUEUE_LEN];
@@ -43,7 +36,7 @@ uint8_t cal_data_buf[READ_SIZE];
 float cal_spec_buf[FFT_LEN];
 float sig_spec_buf[FFT_LEN * NUM_SIG_SPEC * 2];
 int sig_spec_int[NUM_SIG_SPEC * 2];
-float convtab[256];
+
 
 pthread_mutex_t in_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t in_queue_cond = PTHREAD_COND_INITIALIZER;
@@ -52,283 +45,8 @@ pthread_mutex_t out_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
 int out_queue_len = 0;
 
-FILE *init_cal_control(void)
-{ 
-  char fname[256];
-  FILE *fp;
-  int ret;
-
-  /* Set GPIO direction */
-
-  strncpy(fname, GPIOPATH, sizeof(fname) - 1);
-  strncat(fname, GPIODIR, sizeof(fname) - sizeof(GPIODIR));
-  fp = fopen(fname, "w");
-  if(fp == NULL)
-    perror(fname);
-  else {
-    ret = fputs("out\n",fp);
-    if(ret == EOF)
-      perror(fname);
-    fclose(fp);
-  }
-
-  /* Open control file */
-
-  strncpy(fname, GPIOPATH, sizeof(fname) - 1);
-  strncat(fname, GPIOVAL, sizeof(fname) - sizeof(GPIODIR));
-  fp = fopen(fname, "w");
-  if(fp == NULL)
-    perror(fname);
-
-  return fp;
- 
-}
-
-void set_cal_state(FILE *fp, int state)
-{
-  int ret;
-  
-  if (fp == NULL)
-    return;
-
-  if (state != 0)
-    ret = fputs("1\n", fp);
-  else
-    ret = fputs("0\n", fp);
-  fflush(fp);
-
-  if (ret == EOF)
-    perror("set_cal_state");
-  
-}
-
-int set_frequency(rtlsdr_dev_t *dev, uint32_t freq)
-{
-  int r;
-  uint32_t actual_freq;
-
-  r = rtlsdr_set_center_freq(dev, freq);
-  if (r < 0)
-    fprintf(stderr, "WARNING: Failed to set center freq.\n");
-  else {
-    if (dongle_debug) {
-      actual_freq = rtlsdr_get_center_freq(dev);
-      fprintf(stderr, "  Tuned to %u Hz (wanted %u Hz).\n", actual_freq, freq);
-    }
-  }
-
-  return r;
- 
-}
-
-rtlsdr_dev_t *init_dongle(void)
-{
-    int r;
-    int i = 0;
-    int gain = 496;
-
-    uint32_t dev_index = 0;
-    uint32_t frequency = 1320100000;
-    uint32_t samp_rate = SAMPLERATE;
-    int device_count;
-    char vendor[256], product[256], serial[256];
-
-    rtlsdr_dev_t *dev = NULL;
-
-    device_count = rtlsdr_get_device_count();
-    if (!device_count) {
-        fprintf(stderr, "No supported devices found.\n");
-        return NULL;
-    }
-
-    if (dongle_debug) {
-      fprintf(stderr, "Found %d device(s):\n", device_count);
-      for (i = 0; i < device_count; i++) {
-        rtlsdr_get_device_usb_strings(i, vendor, product, serial);
-        fprintf(stderr, "  %d:  %s, %s, SN: %s\n", i, vendor, product, serial);
-      }
-    }
-
-    if (dongle_debug)
-      fprintf(stderr, "Using device %d: %s\n", dev_index, \
-	      rtlsdr_get_device_name(dev_index));
-
-    r = rtlsdr_open(&dev, dev_index);
-    if (r < 0) {
-        fprintf(stderr, "Failed to open rtlsdr device #%d.\n", dev_index);
-        return NULL;
-    }
-
-    /* Set the sample rate */
-    r = rtlsdr_set_sample_rate(dev, samp_rate);
-    if (r < 0)
-        fprintf(stderr, "WARNING: Failed to set sample rate.\n");
-
-    /* Set the frequency */
-    set_frequency(dev, frequency);
-
-    if (0 == gain) {
-        /* Enable automatic gain */
-        r = rtlsdr_set_tuner_gain_mode(dev, 0);
-        if (r < 0)
-            fprintf(stderr, "WARNING: Failed to enable automatic gain.\n");
-    } else {
-        /* Enable manual gain */
-        r = rtlsdr_set_tuner_gain_mode(dev, 1);
-        if (r < 0)
-            fprintf(stderr, "WARNING: Failed to enable manual gain.\n");
-
-        /* Set the tuner gain */
-        r = rtlsdr_set_tuner_gain(dev, gain);
-        if (r < 0)
-            fprintf(stderr, "WARNING: Failed to set tuner gain.\n");
-        else {
-            if (dongle_debug)
-	      fprintf(stderr, "Tuner gain set to %f dB.\n", gain / 10.0);
-	}
-    }
-
-    r = rtlsdr_reset_buffer(dev);
-    if (r < 0)
-      fprintf(stderr, "WARNING: rtlsdr_reset_buffer() failed\n");
-
-    return dev;
-}
-
-void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf,
-		   int *num_spec, float *win,
-		   fftwf_plan fplan, fftwf_complex *fftin,
-		   fftwf_complex *fftout)
-{
-  float f;
-  int nspec, n, k, idx;
-
-  f = (float)sig_len / 2.0 / (float)FFT_LEN;
-  if (f != floorf(f))
-    fprintf(stderr, "WARNING: signal length not divisible by FFT length\n");
-
-  nspec = (int)floorf(f);
-
-  memset(spec_buf, 0, FFT_LEN * sizeof(float));
-
-  for (n = 0; n < nspec; n++) {
-
-    /* Copy signal into FFT buffer, converting format */
-    for (k = 0; k < FFT_LEN; k++) {
-      idx = 2 * (FFT_LEN * n + k);
-      if (win == NULL) {
-	fftin[k][0] = convtab[signal[idx]];
-	fftin[k][1] = convtab[signal[idx + 1]];
-      } else {
-	fftin[k][0] = win[k] * convtab[signal[idx]];
-	fftin[k][1] = win[k] * convtab[signal[idx + 1]];
-      }
-    }
-
-    fftwf_execute(fplan);
-
-    /* Accumulate power spectrum */
-
-    for (k = 0; k < FFT_LEN; k++)
-      spec_buf[k] += fftout[k][0] * fftout[k][0] + fftout[k][1] * fftout[k][1];
-
-  }
-
-  if (num_spec != NULL)
-    *num_spec = nspec;
-
-}
 
 
-fftwf_plan init_fft(fftwf_complex **inbuf, fftwf_complex **outbuf)
-{
-  fftwf_plan fplan;
-  
-  *inbuf = fftwf_alloc_complex(FFT_LEN);
-  if(*inbuf == NULL) {
-    fprintf(stderr, "Failed to allocate FFT input buffer\n");
-    return NULL;
-  }
-
-  *outbuf = fftwf_alloc_complex(FFT_LEN);
-  if(*outbuf == NULL) {
-   fprintf(stderr, "Failed to allocate FFT output buffer\n");
-   return NULL;
-  }
-
-  fplan = fftwf_plan_dft_1d(FFT_LEN, *inbuf, *outbuf, FFTW_FORWARD, \
-			    FFTW_MEASURE);
-
-  return fplan;
-}
-
-void init_convtab(void)
-{
-  int n;
-
-  /* Convert 8-bit offset sample to floating point
-   * with full-scale = 1
-   */
-
-  for (n = 0; n < 256; n++)
-    convtab[n] = ((float)n - 127.0) / 127.0;
-}
-
-void init_window(float *win, int len)
-{
-  int n;
-  float t;
-
-  for (n = 0; n < len; n++) {
-
-    t = 2 * M_PI * ((float)n - (float)(len-1) / 2.0) / (float)len;
-    win[n] = 1.0 + 2.0*sqrt(5.0/9.0)*cos(t);
-  }
-
-}
-
-double find_freq_error(float *calspec, double samplerate, double centfreq,
-		       double calfreq)
-{
-  float max_pow = 0;
-  int max_idx, max_idx_p, max_idx_m, n;
-  double freqerr, f_interp;
-
-  max_idx = 0;
-
-  /* find peak power */
-  for (n = 0; n < FFT_LEN; n++)
-    if (calspec[n] > max_pow) {
-      max_pow = calspec[n];
-      max_idx = n;
-    }
-
-  /* quadratic interpolation of peak frequency */
-
-  max_idx_p = (max_idx + 1) % FFT_LEN;
-  max_idx_m = max_idx - 1;
-  if (max_idx_m < 0)
-    max_idx_m = max_idx_m + FFT_LEN;
-
-  f_interp = 0.5 * (calspec[max_idx_m] - calspec[max_idx_p]) /
-    (calspec[max_idx_m] - 2*calspec[max_idx] + calspec[max_idx_p]);
-
-  /* convert from FFT bin to actual frequency */
-
-  freqerr = (double)max_idx;
-
-  if (freqerr >= FFT_LEN / 2)
-    freqerr = freqerr - (double)FFT_LEN;
-
-  freqerr += f_interp;
-  freqerr = freqerr * samplerate / (double)FFT_LEN;
-  freqerr = (centfreq + freqerr) - calfreq;
-
-  fprintf(stderr, "  Frequency error %.0f Hz (f_interp = %.2f)\n",
-	  freqerr, f_interp);
-
-  return freqerr;
-}
 
 void *comp_thread(void *ptarg)
 {
