@@ -27,7 +27,7 @@ int set_frequency(rtlsdr_dev_t *dev, uint32_t freq)
  
 }
 
-rtlsdr_dev_t *init_dongle(void)
+rtlsdr_dev_t *init_dongle(char *sernum)
 {
     int r;
     int i = 0;
@@ -54,6 +54,8 @@ rtlsdr_dev_t *init_dongle(void)
         fprintf(stderr, "  %d:  %s, %s, SN: %s\n", i, vendor, product, serial);
       }
     }
+
+    dev_index = rtlsdr_get_index_by_serial(sernum);
 
     if (dongle_debug)
       fprintf(stderr, "Using device %d: %s\n", dev_index, \

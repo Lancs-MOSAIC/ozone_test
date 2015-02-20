@@ -22,6 +22,7 @@
 
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
+//#define LINEFREQ 1322754500 /* line + 300 kHz for testing */
 //#define LINEFREQ CALFREQ
 #define CALRXFREQ CALFREQ
 
@@ -47,7 +48,7 @@ pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
 int out_queue_len = 0;
 
 
-int main(void)
+int main(int argc, char *argv[])
 {
   FILE *calfp;
   rtlsdr_dev_t *dev;
@@ -66,6 +67,11 @@ int main(void)
   int data_buf_idx;
   float *fft_win;
 
+  if (argc < 2) {
+    fprintf(stderr, "Usage: ozone_test <dongle serial number>\n");
+    return 1;
+  }
+
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
     fprintf(stderr, "stdout is a terminal, not writing data\n");
@@ -83,7 +89,7 @@ int main(void)
   if ((fplan = init_fft(&fftin, &fftout)) == NULL)
     return 1;
 
-  if ((dev = init_dongle()) == NULL)
+  if ((dev = init_dongle(argv[1])) == NULL)
     return 1;
 
   if ((calfp = init_cal_control()) == NULL)
