@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fftw3.h>
 #include <string.h>
+#include <stdlib.h>
 #include "rtl-sdr.h"
 #include "recthread.h"
 #include "common.h"
@@ -30,22 +31,6 @@
 #define NUM_SIG_SPEC 8
 #define MAX_IN_QUEUE_LEN 3
 
-uint8_t data_buf[SIG_SIZE * MAX_IN_QUEUE_LEN];
-int data_buf_sig_len[MAX_IN_QUEUE_LEN];
-uint8_t cal_data_buf[READ_SIZE];
-float cal_spec_buf[FFT_LEN];
-float sig_spec_buf[FFT_LEN * NUM_SIG_SPEC * 2];
-int sig_spec_int[NUM_SIG_SPEC * 2];
-
-
-pthread_mutex_t in_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t in_queue_cond = PTHREAD_COND_INITIALIZER;
-int in_queue_len = 0;
-pthread_mutex_t out_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
-int out_queue_len = 0;
-
-
 void *rec_thread(void *ptarg)
 {
 
@@ -64,6 +49,12 @@ void *rec_thread(void *ptarg)
   int spec_out_int[2];
   uint64_t time_stamp;
   int data_buf_idx;
+  pthread_mutex_t in_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t in_queue_cond = PTHREAD_COND_INITIALIZER;
+  int in_queue_len = 0;
+  pthread_mutex_t out_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
+  int out_queue_len = 0;
 
   fprintf(stderr, " rec_thread: thread started\n");
 
@@ -72,6 +63,32 @@ void *rec_thread(void *ptarg)
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
     fprintf(stderr, "stdout is a terminal, not writing data\n");
+
+  /* Allocate data buffers */
+
+  uint8_t *data_buf = malloc(SIG_SIZE * MAX_IN_QUEUE_LEN);
+  if (data_buf == NULL)
+    return NULL;
+
+  int *data_buf_sig_len = malloc(MAX_IN_QUEUE_LEN * sizeof(int));
+  if (data_buf_sig_len == NULL)
+    return NULL;
+
+  uint8_t *cal_data_buf = malloc(READ_SIZE);
+  if (cal_data_buf == NULL)
+    return NULL;
+
+  float *cal_spec_buf = malloc(FFT_LEN * sizeof(float));
+  if (cal_spec_buf == NULL)
+    return NULL;
+
+  float *sig_spec_buf = malloc(FFT_LEN * NUM_SIG_SPEC * 2 * sizeof(float));
+  if (sig_spec_buf == NULL)
+    return NULL;
+
+  int *sig_spec_int = malloc(NUM_SIG_SPEC * 2 * sizeof(int));
+  if (sig_spec_int == NULL)
+    return NULL;
 
   if ((fplan = init_fft(&fftin, &fftout)) == NULL)
     return NULL;
@@ -331,7 +348,7 @@ void *rec_thread(void *ptarg)
       if (fwrite(&fft_len, sizeof(fft_len), 1, stdout) != 1)
         fprintf(stderr, "WARNING: could not write out FFT length\n");
 
-      if (fwrite(cal_spec_buf, sizeof(cal_spec_buf), 1, stdout) != 1)
+      if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, stdout) != 1)
 	fprintf(stderr, "WARNING: could not write out cal spectrum\n");
 
       if (fwrite(spec_out_buf, 2 * FFT_LEN * sizeof(float), 1, stdout) != 1)
