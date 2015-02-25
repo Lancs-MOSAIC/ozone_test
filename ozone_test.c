@@ -15,16 +15,16 @@
 #include "common.h"
 #include "recthread.h"
 #include "signalproc.h"
+#include "rtldongle.h"
 
-#define NUM_CHANNELS 1
+#define NUM_CHANNELS 2
 
 int main(int argc, char *argv[])
 {
   FILE *calfp;
   pthread_t rthread;
-  struct rec_thread_context ctx;
   float *fft_win;
-  int r;
+  int r, n;
   pthread_barrier_t cal_on_barrier;
   pthread_barrier_t cal_rec_done_barrier;
   pthread_barrier_t cal_off_barrier;
@@ -81,20 +81,36 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  /* Start a recorder thread */
+  for (n = 0; n < NUM_CHANNELS; n++) {
 
-  ctx.fft_win = fft_win;
-  ctx.dongle_sn = argv[1];
-  ctx.cal_on_barrier = &cal_on_barrier;
-  ctx.cal_rec_done_barrier = &cal_rec_done_barrier;
-  ctx.cal_off_barrier = &cal_off_barrier;
-  ctx.sig_rec_done_barrier = &sig_rec_done_barrier;
-  ctx.outfile_mutex = &outfile_mutex;
+    /* Start a recorder thread */
+    struct rec_thread_context *ctx = malloc(sizeof(struct rec_thread_context));
+    if (ctx == NULL) {
+      fprintf(stderr, "Failed to allocate rec thread context\n");
+      return 1;
+    }
 
-  r = pthread_create(&rthread, NULL, rec_thread, (void *)&ctx);
-  if (r != 0) {
-    fprintf(stderr, "pthread_create(rec_thread): %s", strerror(r));
-    return 1;
+    char dongle_sn[16];
+    sprintf(dongle_sn, "SPEARS%04d", n + 1);
+
+    ctx->fft_win = fft_win;
+    ctx->dev = init_dongle(dongle_sn);
+    if (ctx->dev == NULL) {
+      fprintf(stderr, "Failed to init dongle %s\n", dongle_sn);
+      return 1;
+    }
+    ctx->cal_on_barrier = &cal_on_barrier;
+    ctx->cal_rec_done_barrier = &cal_rec_done_barrier;
+    ctx->cal_off_barrier = &cal_off_barrier;
+    ctx->sig_rec_done_barrier = &sig_rec_done_barrier;
+    ctx->outfile_mutex = &outfile_mutex;
+
+    r = pthread_create(&rthread, NULL, rec_thread, (void *)ctx);
+    if (r != 0) {
+      fprintf(stderr, "pthread_create(rec_thread): %s", strerror(r));
+      return 1;
+    }
+
   }
 
   /* Calibrator control loop */

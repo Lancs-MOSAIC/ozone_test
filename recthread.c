@@ -35,7 +35,6 @@ void *rec_thread(void *ptarg)
 {
 
   struct rec_thread_context *ctx;
-  rtlsdr_dev_t *dev;
   int n, r, n_read, write_data = 0;
   double freq_err;
   uint32_t line_rx_freq;
@@ -93,10 +92,6 @@ void *rec_thread(void *ptarg)
   if ((fplan = init_fft(&fftin, &fftout)) == NULL)
     return NULL;
 
-  if ((dev = init_dongle(ctx->dongle_sn)) == NULL)
-    return NULL;
-
-
   /* Create computational thread */
 
   cctx.in_queue_mutex_p = &in_queue_mutex;
@@ -133,7 +128,7 @@ void *rec_thread(void *ptarg)
 
     time_stamp = (uint64_t)time(NULL);
 
-    set_frequency(dev, CALRXFREQ);
+    set_frequency(ctx->dev, CALRXFREQ);
     
     /* Clear signal data buffer: 127 corresponds to zero signal */
 
@@ -144,9 +139,9 @@ void *rec_thread(void *ptarg)
 
     fprintf(stderr, "  rec_thread: recording cal\n");
 
-    rtlsdr_reset_buffer(dev); /* flush any old signal away */
+    rtlsdr_reset_buffer(ctx->dev); /* flush any old signal away */
 
-    r = rtlsdr_read_sync(dev, cal_data_buf, READ_SIZE, &n_read);
+    r = rtlsdr_read_sync(ctx->dev, cal_data_buf, READ_SIZE, &n_read);
     if (r < 0)
       fprintf(stderr, "WARNING: rtlsdr_read_sync() failed\n");
     if (n_read != READ_SIZE)
@@ -181,12 +176,12 @@ void *rec_thread(void *ptarg)
 				 + freq_err);
       }
 
-      set_frequency(dev, line_rx_freq);
+      set_frequency(ctx->dev, line_rx_freq);
 
       fprintf(stderr, "  rec_thread: recording signal %d, %d\n", scount,
 	      in_queue_in_ptr);
 
-      rtlsdr_reset_buffer(dev); /* flush any cal signal away */
+      rtlsdr_reset_buffer(ctx->dev); /* flush any cal signal away */
 
       /* Check for space in queue, wait if full */
 
@@ -222,7 +217,7 @@ void *rec_thread(void *ptarg)
 
       for(n = 0; n < NUM_BLOCKS; n++) {
 
-	r = rtlsdr_read_sync(dev, &data_buf[in_queue_in_ptr * SIG_SIZE
+	r = rtlsdr_read_sync(ctx->dev, &data_buf[in_queue_in_ptr * SIG_SIZE
 			    + data_buf_idx], READ_SIZE, &n_read);
 	if (r < 0)
 	  fprintf(stderr, "WARNING: rtlsdr_read_sync() failed\n");
@@ -384,7 +379,7 @@ void *rec_thread(void *ptarg)
   }
 
   
-  rtlsdr_close(dev);
+  rtlsdr_close(ctx->dev);
 
   return NULL;
 }
