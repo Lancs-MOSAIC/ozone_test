@@ -56,7 +56,7 @@ void *rec_thread(void *ptarg)
   pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
   int out_queue_len = 0;
 
-  fprintf(stderr, " rec_thread: thread started\n");
+  fprintf(stderr, "  rec_thread: thread started\n");
 
   ctx = (struct rec_thread_context *)ptarg;
 
@@ -139,8 +139,10 @@ void *rec_thread(void *ptarg)
 
     memset(cal_data_buf, 127, sizeof(cal_data_buf)); 
 
-    fprintf(stderr, "  Calibrator on\n");
-    set_cal_state(ctx->calfp, 1);
+    fprintf(stderr, "  rec_thread: waiting for cal on\n");
+    r = pthread_barrier_wait(ctx->cal_on_barrier);
+
+    fprintf(stderr, "  rec_thread: recording cal\n");
 
     rtlsdr_reset_buffer(dev); /* flush any old signal away */
 
@@ -150,16 +152,19 @@ void *rec_thread(void *ptarg)
     if (n_read != READ_SIZE)
       fprintf(stderr, "WARNING: received wrong number of samples (%d)\n", \
 	      n_read);
-  
-    fprintf(stderr, "  Calibrator off\n");
-    set_cal_state(ctx->calfp, 0);
 
+    fprintf(stderr, "  rec_thread: waiting for cal to finish\n");
+    r = pthread_barrier_wait(ctx->cal_rec_done_barrier);
+  
     fprintf(stderr, "  Calculating spectrum... ");
     calc_spectrum(cal_data_buf, READ_SIZE, cal_spec_buf, NULL, \
 		  ctx->fft_win, fplan, fftin, fftout);
     fprintf(stderr, "Done.\n");
 
     freq_err = find_freq_error(cal_spec_buf, SAMPLERATE, CALRXFREQ, CALFREQ);
+
+    fprintf(stderr, "  rec_thread: waiting for cal off\n");
+    r = pthread_barrier_wait(ctx->cal_off_barrier);
 
     for (int scount = 0; scount < 2 * NUM_SIG_SPEC; scount++) {
 
@@ -357,6 +362,8 @@ void *rec_thread(void *ptarg)
       fflush(stdout);
 
     }
+
+    r = pthread_barrier_wait(ctx->sig_rec_done_barrier);
 
   }
 

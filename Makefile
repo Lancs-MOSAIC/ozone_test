@@ -1,5 +1,6 @@
 CC = gcc-4.7 # for better vectorisation support
-CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99
+# _GNU_SOURCE needed for some pthread features
+CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99 -D_GNU_SOURCE
 
 OBJS = ozone_test.o calcontrol.o rtldongle.o signalproc.o compthread.o \
 	recthread.o
