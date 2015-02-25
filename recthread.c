@@ -318,6 +318,15 @@ void *rec_thread(void *ptarg)
 
     if (write_data) {
 
+      /*  writing to output file protected by mutex  */
+
+      r = pthread_mutex_lock(ctx->outfile_mutex);
+      if (r != 0) {
+	fprintf(stderr, "pthread_mutex_lock(ctx->outfile_mutex): %s\n",
+		strerror(r));
+	return NULL;
+      }
+
       uint32_t hdr_magic = HEADER_MAGIC;
       uint32_t samp_rate = SAMPLERATE;
       uint32_t fft_len = FFT_LEN;
@@ -360,6 +369,13 @@ void *rec_thread(void *ptarg)
 	fprintf(stderr, "WARNING: could not write out sig spectra\n");
 
       fflush(stdout);
+
+      r = pthread_mutex_unlock(ctx->outfile_mutex);
+      if (r != 0) {
+	fprintf(stderr, "pthread_mutex_unlock(ctx->outfile_mutex): %s\n",
+		strerror(r));
+	return NULL;
+      }
 
     }
 

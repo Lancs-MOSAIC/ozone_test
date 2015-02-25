@@ -14,6 +14,7 @@ struct rec_thread_context {
   pthread_barrier_t *cal_rec_done_barrier;
   pthread_barrier_t *cal_off_barrier;
   pthread_barrier_t *sig_rec_done_barrier;
+  pthread_mutex_t *outfile_mutex;
 };
 
 

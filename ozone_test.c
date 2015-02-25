@@ -29,6 +29,7 @@ int main(int argc, char *argv[])
   pthread_barrier_t cal_rec_done_barrier;
   pthread_barrier_t cal_off_barrier;
   pthread_barrier_t sig_rec_done_barrier;
+  pthread_mutex_t outfile_mutex = PTHREAD_MUTEX_INITIALIZER;
 
   if (argc < 2) {
     fprintf(stderr, "Usage: ozone_test <dongle serial number>\n");
@@ -88,6 +89,7 @@ int main(int argc, char *argv[])
   ctx.cal_rec_done_barrier = &cal_rec_done_barrier;
   ctx.cal_off_barrier = &cal_off_barrier;
   ctx.sig_rec_done_barrier = &sig_rec_done_barrier;
+  ctx.outfile_mutex = &outfile_mutex;
 
   r = pthread_create(&rthread, NULL, rec_thread, (void *)&ctx);
   if (r != 0) {
