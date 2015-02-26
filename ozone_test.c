@@ -90,15 +90,15 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    char dongle_sn[16];
-    sprintf(dongle_sn, "SPEARS%04d", n + 1);
+    sprintf(ctx->dongle_sn, "SPEARS%04d", n + 1);
 
     ctx->fft_win = fft_win;
-    ctx->dev = init_dongle(dongle_sn);
+    ctx->dev = init_dongle(ctx->dongle_sn);
     if (ctx->dev == NULL) {
-      fprintf(stderr, "Failed to init dongle %s\n", dongle_sn);
+      fprintf(stderr, "Failed to init dongle %s\n", ctx->dongle_sn);
       return 1;
     }
+    ctx->channel = n;
     ctx->cal_on_barrier = &cal_on_barrier;
     ctx->cal_rec_done_barrier = &cal_rec_done_barrier;
     ctx->cal_off_barrier = &cal_off_barrier;

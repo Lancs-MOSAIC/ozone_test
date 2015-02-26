@@ -17,7 +17,7 @@
 #include "calcontrol.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
-#define HEADER_VERSION 1
+#define HEADER_VERSION 2
 
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
@@ -334,10 +334,10 @@ void *rec_thread(void *ptarg)
         fprintf(stderr, "WARNING: could not write out header version\n");
 
       uint32_t rec_len = 3 * FFT_LEN * sizeof(float) + sizeof(hdr_magic)
-	                 + sizeof(hdr_version) + sizeof(rec_len)
-                         + sizeof(time_stamp) + sizeof(freq_err)
-                         + 2 * sizeof(int) + sizeof(samp_rate)
-	                 + sizeof(fft_len);
+	+ sizeof(hdr_version) + sizeof(rec_len)
+	+ sizeof(time_stamp) + sizeof(freq_err)
+	+ 2 * sizeof(int) + sizeof(samp_rate)
+	+ sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN;
 
       if (fwrite(&rec_len, sizeof(rec_len), 1, stdout) != 1)
         fprintf(stderr, "WARNING: could not write out record length\n");
@@ -356,6 +356,12 @@ void *rec_thread(void *ptarg)
 
       if (fwrite(&fft_len, sizeof(fft_len), 1, stdout) != 1)
         fprintf(stderr, "WARNING: could not write out FFT length\n");
+
+      if (fwrite(&ctx->channel, sizeof(ctx->channel), 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out channel number\n");
+
+      if (fwrite(ctx->dongle_sn, MAX_SN_LEN, 1, stdout) != 1)
+	fprintf(stderr, "WARNING: could not write out serial number\n");
 
       if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, stdout) != 1)
 	fprintf(stderr, "WARNING: could not write out cal spectrum\n");
