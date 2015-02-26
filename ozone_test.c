@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
   pthread_barrier_t cal_off_barrier;
   pthread_barrier_t sig_rec_done_barrier;
   pthread_mutex_t outfile_mutex = PTHREAD_MUTEX_INITIALIZER;
+  uint64_t time_stamp;
 
   if (argc < 2) {
     fprintf(stderr, "Usage: ozone_test <dongle serial number>\n");
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
       return 1;
     }
     ctx->channel = n;
+    ctx->time_stamp = &time_stamp;
     ctx->cal_on_barrier = &cal_on_barrier;
     ctx->cal_rec_done_barrier = &cal_rec_done_barrier;
     ctx->cal_off_barrier = &cal_off_barrier;
@@ -119,6 +121,8 @@ int main(int argc, char *argv[])
 
     fprintf(stderr, "  main_thread: calibrator on\n");
     set_cal_state(calfp, 1);
+
+    time_stamp = (uint64_t)time(NULL);
 
     r = pthread_barrier_wait(&cal_on_barrier);
 

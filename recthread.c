@@ -61,7 +61,7 @@ void *rec_thread(void *ptarg)
 
   write_data = !isatty(STDOUT_FILENO);
   if (!write_data)
-    fprintf(stderr, "stdout is a terminal, not writing data\n");
+    fprintf(stderr, "  rec_thread: stdout is a terminal, not writing data\n");
 
   /* Allocate data buffers */
 
@@ -126,8 +126,6 @@ void *rec_thread(void *ptarg)
 
   while (1) {
 
-    time_stamp = (uint64_t)time(NULL);
-
     set_frequency(ctx->dev, CALRXFREQ);
     
     /* Clear signal data buffer: 127 corresponds to zero signal */
@@ -138,6 +136,8 @@ void *rec_thread(void *ptarg)
     r = pthread_barrier_wait(ctx->cal_on_barrier);
 
     fprintf(stderr, "  rec_thread: recording cal\n");
+
+    time_stamp = *(ctx->time_stamp);
 
     rtlsdr_reset_buffer(ctx->dev); /* flush any old signal away */
 
@@ -192,7 +192,7 @@ void *rec_thread(void *ptarg)
       }
 
       while (in_queue_len == MAX_IN_QUEUE_LEN) {
-	fprintf(stderr, "rec_thread: waiting for space in queue\n");
+	fprintf(stderr, "  rec_thread: waiting for space in queue\n");
 	r = pthread_cond_wait(&in_queue_cond, &in_queue_mutex);
 	if (r != 0) {
 	  fprintf(stderr, "  rec_thread: pthread_cond_wait(in_queue): %s\n",

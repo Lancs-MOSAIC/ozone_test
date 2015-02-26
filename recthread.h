@@ -17,6 +17,7 @@ struct rec_thread_context {
   rtlsdr_dev_t *dev; /* librtlsdr device for dongle to use */
   int32_t channel; /* channel number */
   char dongle_sn[MAX_SN_LEN]; /* dongle serial number */
+  uint64_t *time_stamp;
   pthread_barrier_t *cal_on_barrier;
   pthread_barrier_t *cal_rec_done_barrier;
   pthread_barrier_t *cal_off_barrier;
