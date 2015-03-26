@@ -23,7 +23,8 @@ int main(int argc, char *argv[])
   FILE *calfp;
   pthread_t rthread;
   float *fft_win;
-  int r, n;
+  int r, n, opt;
+  int conf_read = 0;
   pthread_barrier_t cal_on_barrier;
   pthread_barrier_t cal_rec_done_barrier;
   pthread_barrier_t cal_off_barrier;
@@ -32,7 +33,20 @@ int main(int argc, char *argv[])
   uint64_t time_stamp;
 
 
-  read_config();
+  while ((opt = getopt(argc, argv, "f:")) != -1) {
+    switch (opt) {
+      case 'f':
+	read_config(optarg);
+	conf_read = 1;
+	break;
+      default:
+	fprintf(stderr, "Usage: ozonespec [-f <config file>]\n");
+	return 1;
+    }
+  }
+
+  if (!conf_read)
+    read_config(NULL);
 
   r = mlockall(MCL_CURRENT | MCL_FUTURE);
   if (r != 0) {

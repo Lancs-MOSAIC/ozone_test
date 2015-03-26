@@ -25,14 +25,17 @@ void parse_config(char *key, char *val)
 
 }
 
-int read_config(void)
+int read_config(char *conf_file)
 {
   FILE *fp;
   char buf[BUF_LEN], key[BUF_LEN], val[BUF_LEN];
+  char *file_name;
 
-  fp = fopen(CONF_FILE, "r");
+  file_name = conf_file != NULL ? conf_file : CONF_FILE;
+
+  fp = fopen(file_name, "r");
   if (fp == NULL) {
-    fprintf(stderr, "Cannot open %s\n", CONF_FILE);
+    fprintf(stderr, "Cannot open %s\n", file_name);
     return 1;
   }
 
@@ -42,7 +45,7 @@ int read_config(void)
        if (sscanf(buf, "%s %s", key, val) >= 1)
 	 parse_config(key, val);
        else
-	 fprintf(stderr, "Format error in %s\n", CONF_FILE);
+	 fprintf(stderr, "Format error in %s\n", file_name);
      }
 
   }

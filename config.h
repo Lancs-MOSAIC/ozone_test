@@ -6,6 +6,6 @@
 extern char dongle_sns[MAX_NUM_CHANNELS][MAX_SN_LEN];
 extern int num_channels;
 
-int read_config(void);
+int read_config(char *conf_file);
 
 #endif /* _CONFIG_H */
