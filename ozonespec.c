@@ -16,8 +16,7 @@
 #include "recthread.h"
 #include "signalproc.h"
 #include "rtldongle.h"
-
-#define NUM_CHANNELS 2
+#include "config.h"
 
 int main(int argc, char *argv[])
 {
@@ -32,10 +31,8 @@ int main(int argc, char *argv[])
   pthread_mutex_t outfile_mutex = PTHREAD_MUTEX_INITIALIZER;
   uint64_t time_stamp;
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: ozone_test <dongle serial number>\n");
-    return 1;
-  }
+
+  read_config();
 
   r = mlockall(MCL_CURRENT | MCL_FUTURE);
   if (r != 0) {
@@ -56,33 +53,33 @@ int main(int argc, char *argv[])
     return 1;
 
   /* Initialise barriers for calibration synchronisation */
-  r = pthread_barrier_init(&cal_on_barrier, NULL, NUM_CHANNELS + 1);
+  r = pthread_barrier_init(&cal_on_barrier, NULL, num_channels + 1);
   if (r != 0) {
     fprintf(stderr, "pthread_barrier_init(cal_on_barrier): %s\n", strerror(r));
     return 1;
   }
 
-  r = pthread_barrier_init(&cal_rec_done_barrier, NULL, NUM_CHANNELS + 1);
+  r = pthread_barrier_init(&cal_rec_done_barrier, NULL, num_channels + 1);
   if (r != 0) {
     fprintf(stderr, "pthread_barrier_init(cal_rec_done_barrier): %s\n",
 	    strerror(r));
     return 1;
   }
 
-  r = pthread_barrier_init(&cal_off_barrier, NULL, NUM_CHANNELS + 1);
+  r = pthread_barrier_init(&cal_off_barrier, NULL, num_channels + 1);
   if (r != 0) {
     fprintf(stderr, "pthread_barrier_init(cal_off_barrier): %s\n", strerror(r));
     return 1;
   }
 
-  r = pthread_barrier_init(&sig_rec_done_barrier, NULL, NUM_CHANNELS + 1);
+  r = pthread_barrier_init(&sig_rec_done_barrier, NULL, num_channels + 1);
   if (r != 0) {
     fprintf(stderr, "pthread_barrier_init(sig_rec_done_barrier): %s\n",
 	    strerror(r));
     return 1;
   }
 
-  for (n = 0; n < NUM_CHANNELS; n++) {
+  for (n = 0; n < num_channels; n++) {
 
     /* Start a recorder thread */
     struct rec_thread_context *ctx = malloc(sizeof(struct rec_thread_context));
@@ -91,7 +88,8 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    sprintf(ctx->dongle_sn, "SPEARS%04d", n + 1);
+    //sprintf(ctx->dongle_sn, "SPEARS%04d", n + 1);
+    strcpy(ctx->dongle_sn, &dongle_sns[n][0]);
 
     ctx->fft_win = fft_win;
     ctx->dev = init_dongle(ctx->dongle_sn);

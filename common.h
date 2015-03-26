@@ -10,5 +10,9 @@
 #define SAMPLERATE 1800000
 #define FFT_LEN 768
 
+#define MAX_SN_LEN 16
+
+#define MAX_NUM_CHANNELS 8
+
 #endif /* _COMMON_H */
 

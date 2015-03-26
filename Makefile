@@ -3,18 +3,19 @@ CC = gcc-4.7 # for better vectorisation support
 CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99 -D_GNU_SOURCE
 
 OBJS = ozonespec.o calcontrol.o rtldongle.o signalproc.o compthread.o \
-	recthread.o
+	recthread.o config.o
 
 LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread
 
 ozonespec: $(OBJS)
 
 calcontrol.o: calcontrol.h
-ozone_test.o: calcontrol.h signalproc.h recthread.h rtldongle.h common.h
+ozonespec.o: calcontrol.h signalproc.h recthread.h rtldongle.h config.h common.h
 rtldongle.o: rtldongle.h common.h
 signalproc.o: signalproc.h common.h
 compthread.o: compthread.h signalproc.h common.h
 recthread.o: recthread.h compthread.h rtldongle.h signalproc.h calcontrol.h \
 		common.h
+config.o: common.h
 
 

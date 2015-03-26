@@ -8,9 +8,8 @@
 #include <pthread.h>
 #include <stdint.h>
 #include "rtl-sdr.h"
+#include "common.h"
 
-
-#define MAX_SN_LEN 16
 
 struct rec_thread_context {
   float *fft_win; /* FFT window coefficients */
