@@ -2,12 +2,12 @@ CC = gcc-4.7 # for better vectorisation support
 # _GNU_SOURCE needed for some pthread features
 CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99 -D_GNU_SOURCE
 
-OBJS = ozone_test.o calcontrol.o rtldongle.o signalproc.o compthread.o \
+OBJS = ozonespec.o calcontrol.o rtldongle.o signalproc.o compthread.o \
 	recthread.o
 
 LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread
 
-ozone_test: $(OBJS)
+ozonespec: $(OBJS)
 
 calcontrol.o: calcontrol.h
 ozone_test.o: calcontrol.h signalproc.h recthread.h rtldongle.h common.h
