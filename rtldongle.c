@@ -30,30 +30,13 @@ int set_frequency(rtlsdr_dev_t *dev, uint32_t freq)
 rtlsdr_dev_t *init_dongle(char *sernum)
 {
     int r;
-    int i = 0;
     int gain = 496;
 
     uint32_t dev_index = 0;
     uint32_t frequency = 1320100000;
     uint32_t samp_rate = SAMPLERATE;
-    int device_count;
-    char vendor[256], product[256], serial[256];
 
     rtlsdr_dev_t *dev = NULL;
-
-    device_count = rtlsdr_get_device_count();
-    if (!device_count) {
-        fprintf(stderr, "No supported devices found.\n");
-        return NULL;
-    }
-
-    if (dongle_debug) {
-      fprintf(stderr, "Found %d device(s):\n", device_count);
-      for (i = 0; i < device_count; i++) {
-        rtlsdr_get_device_usb_strings(i, vendor, product, serial);
-        fprintf(stderr, "  %d:  %s, %s, SN: %s\n", i, vendor, product, serial);
-      }
-    }
 
     dev_index = rtlsdr_get_index_by_serial(sernum);
 
