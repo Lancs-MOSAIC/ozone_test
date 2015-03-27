@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "rtl-sdr.h"
 #include <fftw3.h>
@@ -17,6 +18,45 @@
 #include "signalproc.h"
 #include "rtldongle.h"
 #include "config.h"
+
+timer_t watchdog;
+#define WATCHDOG_TIMEOUT 180
+
+void watchdog_handler(int sig)
+{
+  fprintf(stderr, "Watchdog timer expired! Exiting.\n");
+  exit(EXIT_FAILURE);
+}
+
+void watchdog_reset(void)
+{
+  struct itimerspec its;
+ 
+  its.it_value.tv_sec = WATCHDOG_TIMEOUT;
+  its.it_value.tv_nsec = 0;
+  its.it_interval.tv_sec = 0;
+  its.it_interval.tv_nsec = 0;
+  if (timer_settime(watchdog, 0, &its, NULL) != 0)
+    perror("timer_settime");
+}
+
+int watchdog_init(void)
+{
+
+  struct sigaction sa;
+  sigset_t ss;
+
+  sigemptyset(&ss);
+  sa.sa_handler = watchdog_handler;
+  sa.sa_mask = ss;
+  sa.sa_flags = 0;
+  if (sigaction(SIGALRM, &sa, NULL) != 0)
+    return 1;
+
+  /* create timer, requesting SIGALRM on expiry */
+
+  return timer_create(CLOCK_REALTIME, NULL, &watchdog);
+}
 
 int main(int argc, char *argv[])
 {
@@ -56,6 +96,11 @@ int main(int argc, char *argv[])
   r = mlockall(MCL_CURRENT | MCL_FUTURE);
   if (r != 0) {
     perror("Could not lock memory");
+  }
+
+  if (watchdog_init() != 0) {
+    perror("Could not initialise watchdog timer");
+    return 1;
   }
 
   init_convtab();
@@ -140,6 +185,8 @@ int main(int argc, char *argv[])
     set_cal_state(calfp, 1);
 
     time_stamp = (uint64_t)time(NULL);
+
+    watchdog_reset();
 
     r = pthread_barrier_wait(&cal_on_barrier);
 
