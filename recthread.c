@@ -8,6 +8,7 @@
 #include <fftw3.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "rtl-sdr.h"
 #include "recthread.h"
 #include "common.h"
@@ -15,6 +16,7 @@
 #include "rtldongle.h"
 #include "signalproc.h"
 #include "calcontrol.h"
+#include "config.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
 #define HEADER_VERSION 2
@@ -31,11 +33,105 @@
 #define NUM_SIG_SPEC 8
 #define MAX_IN_QUEUE_LEN 3
 
+/* Write data to file
+ * This function is NOT thread-safe and calls MUST be
+ * protected by a mutex!
+ */
+
+void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
+		double freq_err, int spec_out_int[2],
+		float *cal_spec_buf, float *spec_out_buf)
+{
+  static FILE *fp = NULL;
+  static uint64_t current_day = 0;
+  char filename[_POSIX_PATH_MAX];
+  const uint32_t hdr_magic = HEADER_MAGIC;
+  const uint32_t samp_rate = SAMPLERATE;
+  const uint32_t fft_len = FFT_LEN;
+  const uint32_t hdr_version = HEADER_VERSION;
+  struct tm *tms;
+  time_t t;
+
+  uint64_t wanted_day = time_stamp - (time_stamp % 86400);
+
+  if (fp != NULL) {
+    /* if currently open file is not the right one, close it */
+    if (current_day != wanted_day) {
+      fclose(fp);
+      fp = NULL;
+    }
+  }
+
+  if (fp == NULL) {
+    /* open the wanted file */
+    t = (time_t)wanted_day;
+    tms = gmtime(&t);
+    snprintf(filename, _POSIX_PATH_MAX, "%s/%04d%02d%02d_s%03d.spec",
+	     data_dir, 1900 + tms->tm_year, tms->tm_mon + 1, tms->tm_mday,
+	     vsrt_num);
+    fp = fopen(filename, "a");
+    if (fp == NULL) {
+      fprintf(stderr, "Could not open file %s\n", filename);
+      return;
+    }
+    fprintf(stderr, "Opened file %s\n", filename);
+    current_day = wanted_day;
+  }
+
+  
+
+  if (fwrite(&hdr_magic, sizeof(hdr_magic), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out magic value\n");
+
+  if (fwrite(&hdr_version, sizeof(hdr_version), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out header version\n");
+
+  uint32_t rec_len = 3 * FFT_LEN * sizeof(float) + sizeof(hdr_magic)
+    + sizeof(hdr_version) + sizeof(rec_len)
+    + sizeof(time_stamp) + sizeof(freq_err)
+    + 2 * sizeof(int) + sizeof(samp_rate)
+    + sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN;
+
+  if (fwrite(&rec_len, sizeof(rec_len), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out record length\n");
+
+  if (fwrite(&time_stamp, sizeof(time_stamp), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out timestamp\n");
+
+  if (fwrite(&freq_err, sizeof(freq_err), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out freq err\n");
+
+  if (fwrite(spec_out_int, 2 * sizeof(int), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out int factors\n");
+
+  if (fwrite(&samp_rate, sizeof(samp_rate), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out sample rate\n");
+
+  if (fwrite(&fft_len, sizeof(fft_len), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out FFT length\n");
+
+  if (fwrite(&ctx->channel, sizeof(ctx->channel), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out channel number\n");
+
+  if (fwrite(ctx->dongle_sn, MAX_SN_LEN, 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out serial number\n");
+
+  if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out cal spectrum\n");
+
+  if (fwrite(spec_out_buf, 2 * FFT_LEN * sizeof(float), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out sig spectra\n");
+
+  fflush(fp);
+
+}
+
+
 void *rec_thread(void *ptarg)
 {
 
   struct rec_thread_context *ctx;
-  int n, r, n_read, write_data = 0;
+  int n, r, n_read;
   double freq_err;
   uint32_t line_rx_freq;
   pthread_t cthread;
@@ -58,10 +154,6 @@ void *rec_thread(void *ptarg)
   fprintf(stderr, "  rec_thread: thread started\n");
 
   ctx = (struct rec_thread_context *)ptarg;
-
-  write_data = !isatty(STDOUT_FILENO);
-  if (!write_data)
-    fprintf(stderr, "  rec_thread: stdout is a terminal, not writing data\n");
 
   /* Allocate data buffers */
 
@@ -311,74 +403,26 @@ void *rec_thread(void *ptarg)
       }
     }
 
-    if (write_data) {
 
-      /*  writing to output file protected by mutex  */
+    /*  writing to output file protected by mutex  */
 
-      r = pthread_mutex_lock(ctx->outfile_mutex);
-      if (r != 0) {
-	fprintf(stderr, "pthread_mutex_lock(ctx->outfile_mutex): %s\n",
-		strerror(r));
-	return NULL;
-      }
-
-      uint32_t hdr_magic = HEADER_MAGIC;
-      uint32_t samp_rate = SAMPLERATE;
-      uint32_t fft_len = FFT_LEN;
-      uint32_t hdr_version = HEADER_VERSION;
-
-      if (fwrite(&hdr_magic, sizeof(hdr_magic), 1, stdout) != 1)
-        fprintf(stderr, "WARNING: could not write out magic value\n");
-
-      if (fwrite(&hdr_version, sizeof(hdr_version), 1, stdout) != 1)
-        fprintf(stderr, "WARNING: could not write out header version\n");
-
-      uint32_t rec_len = 3 * FFT_LEN * sizeof(float) + sizeof(hdr_magic)
-	+ sizeof(hdr_version) + sizeof(rec_len)
-	+ sizeof(time_stamp) + sizeof(freq_err)
-	+ 2 * sizeof(int) + sizeof(samp_rate)
-	+ sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN;
-
-      if (fwrite(&rec_len, sizeof(rec_len), 1, stdout) != 1)
-        fprintf(stderr, "WARNING: could not write out record length\n");
-
-      if (fwrite(&time_stamp, sizeof(time_stamp), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out timestamp\n");
-
-      if (fwrite(&freq_err, sizeof(freq_err), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out freq err\n");
-
-      if (fwrite(spec_out_int, 2 * sizeof(int), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out int factors\n");
-
-      if (fwrite(&samp_rate, sizeof(samp_rate), 1, stdout) != 1)
-        fprintf(stderr, "WARNING: could not write out sample rate\n");
-
-      if (fwrite(&fft_len, sizeof(fft_len), 1, stdout) != 1)
-        fprintf(stderr, "WARNING: could not write out FFT length\n");
-
-      if (fwrite(&ctx->channel, sizeof(ctx->channel), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out channel number\n");
-
-      if (fwrite(ctx->dongle_sn, MAX_SN_LEN, 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out serial number\n");
-
-      if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out cal spectrum\n");
-
-      if (fwrite(spec_out_buf, 2 * FFT_LEN * sizeof(float), 1, stdout) != 1)
-	fprintf(stderr, "WARNING: could not write out sig spectra\n");
-
-      fflush(stdout);
-
-      r = pthread_mutex_unlock(ctx->outfile_mutex);
-      if (r != 0) {
-	fprintf(stderr, "pthread_mutex_unlock(ctx->outfile_mutex): %s\n",
-		strerror(r));
-	return NULL;
-      }
-
+    r = pthread_mutex_lock(ctx->outfile_mutex);
+    if (r != 0) {
+      fprintf(stderr, "pthread_mutex_lock(ctx->outfile_mutex): %s\n",
+	      strerror(r));
+      return NULL;
     }
+
+    write_file(ctx, time_stamp, freq_err, spec_out_int,
+	       cal_spec_buf, spec_out_buf);
+
+    r = pthread_mutex_unlock(ctx->outfile_mutex);
+    if (r != 0) {
+      fprintf(stderr, "pthread_mutex_unlock(ctx->outfile_mutex): %s\n",
+	      strerror(r));
+      return NULL;
+    }
+
 
     r = pthread_barrier_wait(ctx->sig_rec_done_barrier);
 

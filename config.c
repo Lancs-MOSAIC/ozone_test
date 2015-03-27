@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <limits.h>
 #include "config.h"
 #include "common.h"
 
@@ -8,6 +11,8 @@
 
 char dongle_sns[MAX_NUM_CHANNELS][MAX_SN_LEN];
 int num_channels = 0;
+int vsrt_num = 0;
+char data_dir[_POSIX_PATH_MAX] = ".";
 
 void parse_config(char *key, char *val)
 {
@@ -21,6 +26,12 @@ void parse_config(char *key, char *val)
       fprintf(stderr, "Too many channels defined!\n");
     }
 
+  }
+  else if (strcmp(key, "VSRTNUM") == 0) {
+    vsrt_num = atoi(val);
+  }
+  else if (strcmp(key, "DATADIR") == 0) {
+    strncpy(data_dir, val, _POSIX_PATH_MAX);
   }
 
 }

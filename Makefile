@@ -15,7 +15,7 @@ rtldongle.o: rtldongle.h common.h
 signalproc.o: signalproc.h common.h
 compthread.o: compthread.h signalproc.h common.h
 recthread.o: recthread.h compthread.h rtldongle.h signalproc.h calcontrol.h \
-		common.h
+		config.h common.h
 config.o: common.h
 
 
