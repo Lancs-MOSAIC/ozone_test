@@ -50,6 +50,8 @@ int read_config(char *conf_file)
     return 1;
   }
 
+  fprintf(stderr, "Reading configuration from %s\n", file_name);
+
   while (fgets(buf, BUF_LEN, fp) != NULL) {
 
      if ((buf[0] != '*') && (buf[0] != '#') && (buf[0] != '\n')) {

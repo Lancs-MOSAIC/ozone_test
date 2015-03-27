@@ -48,6 +48,11 @@ int main(int argc, char *argv[])
   if (!conf_read)
     read_config(NULL);
 
+  if (num_channels < 1) {
+    fprintf(stderr, "No channels defined!\n");
+    return 1;
+  }
+
   r = mlockall(MCL_CURRENT | MCL_FUTURE);
   if (r != 0) {
     perror("Could not lock memory");
