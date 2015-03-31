@@ -1,0 +1,14 @@
+[Unit]
+Description=Ozone spectrometer
+Requires=ozonedto.service gnssdo.service
+After=ozonedto.service gnssdo.service
+
+[Service]
+ExecStart=/usr/bin/screen -D -m -S ozonespec "/home/senior/devel/ozone_test/ozonespec"
+WorkingDirectory=/home/senior/devel/ozone_test
+#StandardError=null
+Type=simple
+
+[Install]
+WantedBy=graphical.target
+
