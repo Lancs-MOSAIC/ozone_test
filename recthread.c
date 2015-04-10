@@ -155,6 +155,12 @@ void *rec_thread(void *ptarg)
 
   ctx = (struct rec_thread_context *)ptarg;
 
+  if (READ_SIZE % (2 * FFT_LEN) != 0)
+    fprintf(stderr, "  rec_thread: WARNING: dongle read length is not a multiple of FFT length\n");
+
+  if (SIG_SIZE % (2 * FFT_LEN) != 0)
+    fprintf(stderr, "  rec_thread: WARNING: signal length is not a multiple of FFT length\n");
+
   /* Allocate data buffers */
 
   uint8_t *data_buf = malloc(SIG_SIZE * MAX_IN_QUEUE_LEN);

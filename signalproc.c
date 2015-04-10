@@ -14,14 +14,11 @@ void calc_spectrum(uint8_t *signal, int sig_len, float *spec_buf,
 		   fftwf_plan fplan, fftwf_complex *fftin,
 		   fftwf_complex *fftout)
 {
-  float f;
   int nspec, n, k, idx;
 
-  f = (float)sig_len / 2.0 / (float)FFT_LEN;
-  if (f != floorf(f))
-    fprintf(stderr, "WARNING: signal length not divisible by FFT length\n");
+  /* Number of whole FFT blocks in this signal block */
 
-  nspec = (int)floorf(f);
+  nspec = sig_len / (2 * FFT_LEN);
 
   memset(spec_buf, 0, FFT_LEN * sizeof(float));
 
