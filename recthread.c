@@ -66,7 +66,7 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
     /* open the wanted file */
     t = (time_t)wanted_day;
     tms = gmtime(&t);
-    snprintf(filename, _POSIX_PATH_MAX, "%s/%04d%02d%02d_s%03d.spec",
+    snprintf(filename, _POSIX_PATH_MAX, "%s/%04d%02d%02d_s%03d.ozo",
 	     data_dir, 1900 + tms->tm_year, tms->tm_mon + 1, tms->tm_mday,
 	     vsrt_num);
     fp = fopen(filename, "a");
