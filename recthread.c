@@ -19,7 +19,7 @@
 #include "config.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
-#define HEADER_VERSION 2
+#define HEADER_VERSION 3
 
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
@@ -49,6 +49,7 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
   const uint32_t samp_rate = SAMPLERATE;
   const uint32_t fft_len = FFT_LEN;
   const uint32_t hdr_version = HEADER_VERSION;
+  const double line_freq = LINEFREQ;
   struct tm *tms;
   time_t t;
 
@@ -90,7 +91,8 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
     + sizeof(hdr_version) + sizeof(rec_len)
     + sizeof(time_stamp) + sizeof(freq_err)
     + 2 * sizeof(int) + sizeof(samp_rate)
-    + sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN;
+    + sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN
+    + sizeof(line_freq) + sizeof(vsrt_num) + MAX_STATION_NAME;
 
   if (fwrite(&rec_len, sizeof(rec_len), 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out record length\n");
@@ -115,6 +117,15 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
 
   if (fwrite(ctx->dongle_sn, MAX_SN_LEN, 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out serial number\n");
+
+  if (fwrite(&line_freq, sizeof(line_freq), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out line freq.\n");
+ 
+  if (fwrite(&vsrt_num, sizeof(vsrt_num), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out VSRT number\n");
+
+  if (fwrite(station_name, MAX_STATION_NAME, 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out station name\n");
 
   if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out cal spectrum\n");

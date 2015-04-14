@@ -4,10 +4,13 @@
 #include <limits.h>
 #include "common.h"
 
+#define MAX_STATION_NAME 16
+
 extern char dongle_sns[MAX_NUM_CHANNELS][MAX_SN_LEN];
 extern int num_channels;
 extern int vsrt_num;
 extern char data_dir[_POSIX_PATH_MAX];
+extern char station_name[MAX_STATION_NAME];
 
 int read_config(char *conf_file);
 

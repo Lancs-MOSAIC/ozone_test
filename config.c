@@ -13,6 +13,7 @@ char dongle_sns[MAX_NUM_CHANNELS][MAX_SN_LEN];
 int num_channels = 0;
 int vsrt_num = 0;
 char data_dir[_POSIX_PATH_MAX] = ".";
+char station_name[MAX_STATION_NAME] = "Test";
 
 void parse_config(char *key, char *val)
 {
@@ -32,6 +33,11 @@ void parse_config(char *key, char *val)
   }
   else if (strcmp(key, "DATADIR") == 0) {
     strncpy(data_dir, val, _POSIX_PATH_MAX);
+  }
+  else if (strcmp(key, "STATNAME") == 0) {
+    if (strlen(val) > 12)
+      fprintf(stderr, "Warning: station name > 12 characters\n");
+    strncpy(station_name, val, MAX_STATION_NAME);
   }
 
 }
