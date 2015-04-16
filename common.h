@@ -14,5 +14,10 @@
 
 #define MAX_NUM_CHANNELS 8
 
+/* Realtime scheduling priorities */
+
+#define RT_PRIO_MAIN 50 /* used by main thread, which has the watchdog */
+#define RT_PRIO_REC (RT_PRIO_MAIN - 1) /* recorder threads */
+
 #endif /* _COMMON_H */
 

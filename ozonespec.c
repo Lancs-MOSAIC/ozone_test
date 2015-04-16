@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 
 #include "rtl-sdr.h"
 #include <fftw3.h>
@@ -93,11 +94,6 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  r = mlockall(MCL_CURRENT | MCL_FUTURE);
-  if (r != 0) {
-    perror("Could not lock memory");
-  }
-
   if (watchdog_init() != 0) {
     perror("Could not initialise watchdog timer");
     return 1;
@@ -152,7 +148,6 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    //sprintf(ctx->dongle_sn, "SPEARS%04d", n + 1);
     strcpy(ctx->dongle_sn, &dongle_sns[n][0]);
 
     ctx->fft_win = fft_win;
@@ -176,6 +171,14 @@ int main(int argc, char *argv[])
     }
 
   }
+
+  /* Set realtime scheduling */
+
+  struct sched_param spar;
+  spar.sched_priority = RT_PRIO_MAIN;
+  r = sched_setscheduler(getpid(), SCHED_FIFO, &spar);
+  if (r != 0)
+    perror("  main_thread: Failed to set RT scheduling");
 
   /* Calibrator control loop */
 

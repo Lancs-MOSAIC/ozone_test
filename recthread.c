@@ -233,11 +233,11 @@ void *rec_thread(void *ptarg)
   /* set RT scheduling for this thread */
 
   struct sched_param spar;
-  spar.sched_priority = 99;
+  spar.sched_priority = RT_PRIO_REC;
   r = pthread_setschedparam(pthread_self(), SCHED_FIFO, &spar);
   if (r != 0) {
-    fprintf(stderr, "WARNING: could not set RT scheduling: %s\n", \
-	    strerror(r));
+    fprintf(stderr, "  rec_thread %d: could not set RT scheduling: %s\n",
+	    ctx->channel, strerror(r));
   }
 
   while (1) {
@@ -462,7 +462,7 @@ void *rec_thread(void *ptarg)
       return NULL;
     }
 
-    fprintf(stderr, "  recthread %d: max signal level = %d\n",
+    fprintf(stderr, "  rec_thread %d: max signal level = %d\n",
             ctx->channel, max_sig_level); 
 
     r = pthread_barrier_wait(ctx->sig_rec_done_barrier);
