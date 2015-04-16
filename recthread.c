@@ -19,7 +19,7 @@
 #include "config.h"
 
 #define HEADER_MAGIC 0xa9e4b8b4
-#define HEADER_VERSION 3
+#define HEADER_VERSION 4
 
 #define CALFREQ 1320000000 /* actual calibrator frequency */
 #define LINEFREQ 1322454500 /* actual line frequency */
@@ -32,6 +32,7 @@
 #define SIG_SIZE (NUM_BLOCKS * READ_SIZE)
 #define NUM_SIG_SPEC 8
 #define MAX_IN_QUEUE_LEN 3
+#define MAX_SIG_LEVEL_SAMPLES 10000
 
 /* Write data to file
  * This function is NOT thread-safe and calls MUST be
@@ -40,7 +41,8 @@
 
 void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
 		double freq_err, int spec_out_int[2],
-		float *cal_spec_buf, float *spec_out_buf)
+		float *cal_spec_buf, float *spec_out_buf,
+		int32_t max_sig_level)
 {
   static FILE *fp = NULL;
   static uint64_t current_day = 0;
@@ -92,7 +94,8 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
     + sizeof(time_stamp) + sizeof(freq_err)
     + 2 * sizeof(int) + sizeof(samp_rate)
     + sizeof(fft_len) + sizeof(ctx->channel) + MAX_SN_LEN
-    + sizeof(line_freq) + sizeof(vsrt_num) + MAX_STATION_NAME;
+    + sizeof(line_freq) + sizeof(vsrt_num) + MAX_STATION_NAME
+    + sizeof(max_sig_level);
 
   if (fwrite(&rec_len, sizeof(rec_len), 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out record length\n");
@@ -126,6 +129,9 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
 
   if (fwrite(station_name, MAX_STATION_NAME, 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out station name\n");
+
+  if (fwrite(&max_sig_level, sizeof(max_sig_level), 1, fp) != 1)
+    fprintf(stderr, "WARNING: could not write out max sig level\n");
 
   if (fwrite(cal_spec_buf, FFT_LEN * sizeof(float), 1, fp) != 1)
     fprintf(stderr, "WARNING: could not write out cal spectrum\n");
@@ -161,6 +167,7 @@ void *rec_thread(void *ptarg)
   pthread_mutex_t out_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_cond_t out_queue_cond = PTHREAD_COND_INITIALIZER;
   int out_queue_len = 0;
+  int32_t max_sig_level;
 
   fprintf(stderr, "  rec_thread: thread started\n");
 
@@ -234,6 +241,8 @@ void *rec_thread(void *ptarg)
   }
 
   while (1) {
+
+    max_sig_level = 0;
 
     set_frequency(ctx->dev, CALRXFREQ);
     
@@ -343,6 +352,19 @@ void *rec_thread(void *ptarg)
 
       }
 
+      /* Use first part of recorded signal to monitor level */
+
+      int samps_to_check = data_buf_sig_len[in_queue_in_ptr] 
+                           > MAX_SIG_LEVEL_SAMPLES ? MAX_SIG_LEVEL_SAMPLES
+                           : data_buf_sig_len[in_queue_in_ptr];
+
+      for (n = 0; n < samps_to_check; n++) {
+	int32_t x = (int32_t)data_buf[in_queue_in_ptr * SIG_SIZE + n] - 127;
+        if (abs(x) > max_sig_level)
+	  max_sig_level = x;
+      }
+        
+
       r = pthread_mutex_lock(&in_queue_mutex);
       if (r != 0) {
 	fprintf(stderr, "pthread_mutex_lock: %s\n", strerror(r));
@@ -431,7 +453,7 @@ void *rec_thread(void *ptarg)
     }
 
     write_file(ctx, time_stamp, freq_err, spec_out_int,
-	       cal_spec_buf, spec_out_buf);
+	       cal_spec_buf, spec_out_buf, max_sig_level);
 
     r = pthread_mutex_unlock(ctx->outfile_mutex);
     if (r != 0) {
@@ -440,6 +462,8 @@ void *rec_thread(void *ptarg)
       return NULL;
     }
 
+    fprintf(stderr, "  recthread %d: max signal level = %d\n",
+            ctx->channel, max_sig_level); 
 
     r = pthread_barrier_wait(ctx->sig_rec_done_barrier);
 
