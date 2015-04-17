@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Configure GPIO so that ozonespec can switch the calibrator.
+# Must be run as root.
+
+GPIONUM=60
+
+echo $GPIONUM > /sys/class/gpio/export
+chmod a+w /sys/class/gpio/gpio${GPIONUM}/direction
+chmod a+w /sys/class/gpio/gpio${GPIONUM}/value
+
+

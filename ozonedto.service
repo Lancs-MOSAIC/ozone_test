@@ -3,10 +3,13 @@ Description=Load Device Tree overlays for ozone spectrometer
 
 [Service]
 Type=oneshot
+; Load device tree overlays
 ExecStart=/bin/sh -c "echo BB-UART1 > $(echo -n /sys/devices/bone_capemgr.*/slots)"
 ExecStart=/bin/sh -c "echo BB-UART2 > $(echo -n /sys/devices/bone_capemgr.*/slots)"
-ExecStart=/bin/sh -c "echo dmtimer4-test > $(echo -n /sys/devices/bone_capemgr.*/slots)"
-ExecStart=/bin/sh -c /home/senior/mosaic/src/mit/setupgpio
+ExecStart=/bin/sh -c "echo MOSAIC-cape > $(echo -n /sys/devices/bone_capemgr.*/slots)"
+; Configure GPIO pin for calibrator switching
+ExecStart=/bin/sh -c /home/senior/devel/ozone_test/setupgpio
+; Always run CPU at full speed
 ExecStart=/usr/bin/cpufreq-set -g performance
 RemainAfterExit=yes
 
