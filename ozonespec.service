@@ -8,6 +8,7 @@ ExecStart=/usr/bin/screen -D -m -S ozonespec "/home/ozone/mosaic/ozone_test/ozon
 WorkingDirectory=/home/ozone/mosaic/ozone_test
 #StandardError=null
 Type=simple
+User=ozone
 
 [Install]
 WantedBy=graphical.target
