@@ -7,6 +7,8 @@ OBJS = ozonespec.o calcontrol.o rtldongle.o signalproc.o compthread.o \
 
 LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread
 
+all: ozonespec dtoverlay
+
 ozonespec: $(OBJS)
 
 calcontrol.o: calcontrol.h
@@ -18,4 +20,10 @@ recthread.o: recthread.h compthread.h rtldongle.h signalproc.h calcontrol.h \
 		config.h common.h
 config.o: common.h
 
+
+dtoverlay: MOSAIC-cape-00A0.dtbo
+
+# Device tree overlays
+%.dtbo: %.dts
+	dtc -O dtb -o $@ -b 0 -@ $<
 
