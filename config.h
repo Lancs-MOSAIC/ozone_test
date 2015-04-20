@@ -11,6 +11,9 @@ extern int num_channels;
 extern int vsrt_num;
 extern char data_dir[_POSIX_PATH_MAX];
 extern char station_name[MAX_STATION_NAME];
+extern int watchdog_timeout;
+extern int keep_cal_on;
+extern double line_freq;
 
 int read_config(char *conf_file);
 

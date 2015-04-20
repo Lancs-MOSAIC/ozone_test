@@ -8,12 +8,19 @@
 
 #define CONF_FILE "ozonespec.conf"
 #define BUF_LEN 128
+#define WATCHDOG_TIMEOUT 180
+#define LINEFREQ 1322454500 /* actual line frequency */
+//#define LINEFREQ 1322754500 /* line + 300 kHz for testing */
+//#define LINEFREQ CALFREQ
 
 char dongle_sns[MAX_NUM_CHANNELS][MAX_SN_LEN];
 int num_channels = 0;
 int vsrt_num = 0;
 char data_dir[_POSIX_PATH_MAX] = ".";
 char station_name[MAX_STATION_NAME] = "Test";
+int watchdog_timeout = WATCHDOG_TIMEOUT;
+int keep_cal_on = 0;
+double line_freq = LINEFREQ;
 
 void parse_config(char *key, char *val)
 {
@@ -39,7 +46,28 @@ void parse_config(char *key, char *val)
       fprintf(stderr, "Warning: station name > 12 characters\n");
     strncpy(station_name, val, MAX_STATION_NAME);
   }
-
+  else if (strcmp(key, "WATCHDOGTIME") == 0) {
+    watchdog_timeout = atoi(val);
+    if (watchdog_timeout < WATCHDOG_TIMEOUT) {
+      fprintf(stderr, "Watchdog time-out (%d) too short, setting to minimum (%d)\n",
+	      watchdog_timeout, WATCHDOG_TIMEOUT);
+      watchdog_timeout = WATCHDOG_TIMEOUT;
+    }
+  }
+  else if (strcmp(key, "VCALSTAYON") == 0) {
+    keep_cal_on = atoi(val);
+    if ((keep_cal_on != 0) && (keep_cal_on != 1)) {
+      fprintf(stderr, "VCALSTAYON must be 0 or 1. Setting to 0.\n");
+      keep_cal_on = 0;
+    }
+  }
+  else if (strcmp(key, "FLINE") == 0) {
+    line_freq = atof(val) * 1.0E6;
+    if ((line_freq < 0) || (line_freq > 2.5E9)) {
+      fprintf(stderr, "Line frequency out of range. Setting to default.\n");
+      line_freq = LINEFREQ;
+    }
+  }
 }
 
 int read_config(char *conf_file)

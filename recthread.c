@@ -22,9 +22,6 @@
 #define HEADER_VERSION 4
 
 #define CALFREQ 1320000000 /* actual calibrator frequency */
-#define LINEFREQ 1322454500 /* actual line frequency */
-//#define LINEFREQ 1322754500 /* line + 300 kHz for testing */
-//#define LINEFREQ CALFREQ
 #define CALRXFREQ CALFREQ
 
 #define READ_SIZE (16384 * 256)
@@ -51,7 +48,6 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
   const uint32_t samp_rate = SAMPLERATE;
   const uint32_t fft_len = FFT_LEN;
   const uint32_t hdr_version = HEADER_VERSION;
-  const double line_freq = LINEFREQ;
   struct tm *tms;
   time_t t;
 
@@ -285,12 +281,12 @@ void *rec_thread(void *ptarg)
 
 	/* tune above line frequency */
 	
-	line_rx_freq = (uint32_t)((double)LINEFREQ + (double)(SAMPLERATE / 4) \
+	line_rx_freq = (uint32_t)(line_freq + (double)(SAMPLERATE / 4)
 				  + freq_err);
       } else {
 	/* tune below line frequency */
 
-	line_rx_freq = (uint32_t)((double)LINEFREQ - (double)(SAMPLERATE / 4) \
+	line_rx_freq = (uint32_t)(line_freq - (double)(SAMPLERATE / 4)
 				 + freq_err);
       }
 

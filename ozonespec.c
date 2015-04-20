@@ -21,7 +21,6 @@
 #include "config.h"
 
 timer_t watchdog;
-#define WATCHDOG_TIMEOUT 180
 
 void watchdog_handler(int sig)
 {
@@ -33,7 +32,7 @@ void watchdog_reset(void)
 {
   struct itimerspec its;
  
-  its.it_value.tv_sec = WATCHDOG_TIMEOUT;
+  its.it_value.tv_sec = watchdog_timeout;
   its.it_value.tv_nsec = 0;
   its.it_interval.tv_sec = 0;
   its.it_interval.tv_nsec = 0;
@@ -196,8 +195,11 @@ int main(int argc, char *argv[])
     fprintf(stderr, "  main_thread: waiting for rec threads\n");
     r = pthread_barrier_wait(&cal_rec_done_barrier);
 
-    fprintf(stderr, "  main_thread: calibrator off\n");
-    set_cal_state(calfp, 0);
+    if (!keep_cal_on) {
+      fprintf(stderr, "  main_thread: calibrator off\n");
+      set_cal_state(calfp, 0);
+    } else
+      fprintf(stderr, "  main_thread: calibrator remains on\n");
 
     r = pthread_barrier_wait(&cal_off_barrier);
 
