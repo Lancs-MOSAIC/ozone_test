@@ -1,12 +1,11 @@
 [Unit]
 Description=Load Device Tree overlays for ozone spectrometer
-After=cpufrequtils.service
+After=cpufrequtils.service gpsd.service
+Requires=gpsd.service
 
 [Service]
 Type=oneshot
 ; Load device tree overlays
-ExecStart=/bin/sh -c "echo BB-UART1 > $(echo -n /sys/devices/bone_capemgr.*/slots)"
-ExecStart=/bin/sh -c "echo BB-UART2 > $(echo -n /sys/devices/bone_capemgr.*/slots)"
 ExecStart=/bin/sh -c "echo MOSAIC-cape > $(echo -n /sys/devices/bone_capemgr.*/slots)"
 ; Configure GPIO pin for calibrator switching
 ExecStart=/bin/sh -c /home/ozone/mosaic/ozone_test/setupgpio
