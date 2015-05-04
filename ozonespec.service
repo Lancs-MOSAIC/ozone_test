@@ -9,6 +9,8 @@ WorkingDirectory=/home/ozone/mosaic/ozone_test
 #StandardError=null
 Type=simple
 User=ozone
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=graphical.target
