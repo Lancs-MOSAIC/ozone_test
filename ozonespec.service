@@ -4,6 +4,7 @@ Requires=ozonedto.service gnssdo.service
 After=ozonedto.service gnssdo.service
 
 [Service]
+ExecStartPre=/home/ozone/mosaic/ozone_test/check_ntp.sh
 ExecStart=/usr/bin/screen -D -m -S ozonespec "/home/ozone/mosaic/ozone_test/ozonespec"
 WorkingDirectory=/home/ozone/mosaic/ozone_test
 #StandardError=null
