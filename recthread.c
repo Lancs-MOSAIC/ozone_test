@@ -244,7 +244,7 @@ void *rec_thread(void *ptarg)
     
     /* Clear signal data buffer: 127 corresponds to zero signal */
 
-    memset(cal_data_buf, 127, sizeof(cal_data_buf)); 
+    memset(cal_data_buf, 127, READ_SIZE); 
 
     fprintf(stderr, "  rec_thread: waiting for cal on\n");
     r = pthread_barrier_wait(ctx->cal_on_barrier);
