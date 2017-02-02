@@ -5,7 +5,7 @@ CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99 -D_GNU_SOURCE
 OBJS = ozonespec.o calcontrol.o rtldongle.o signalproc.o compthread.o \
 	recthread.o config.o
 
-LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread
+LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread -lrt
 
 all: ozonespec dtoverlay
 
