@@ -1,4 +1,4 @@
-CC = gcc-4.9 # for better vectorisation support
+CC = gcc-4.9 # Use gcc >= 4.7 for better vectorisation support
 # _GNU_SOURCE needed for some pthread features
 CFLAGS=-mfpu=neon -funsafe-math-optimizations -O3 -Wall -std=c99 -D_GNU_SOURCE
 
