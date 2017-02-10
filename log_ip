@@ -1,0 +1,47 @@
+#!/bin/sh
+
+# Log IP, time and hostname to a remote server.
+# Derived from log_ip used by AuroraWatchNet/
+#
+# Steve Marple, 2017.
+
+#
+# chkconfig: 12345 97 03
+# description: log_ip will log the IP address to a webserver
+
+# Add the following lines to crontab
+# @reboot log_ip reboot > /dev/null 2>&1
+# @hourly log_ip > /dev/null 2>&1
+
+
+# See how we were called.
+
+hostname=`hostname`
+ip=`ip route get 148.88.0.0 | awk '{print $NF;exit}'`
+
+if [ "$#" = 2 ]; then
+    # Called from plugd with interface and up/down
+    if [ "$1" = "eth0" -a "$2" = "up" ]; then
+	action="${1}_${2}"
+    else
+	exit 0
+    fi
+else
+    action="$1"
+fi
+
+
+# Include date/time in the report.
+if [ "$action" = "reboot" ]; then
+    # Wait for network to be set and NTP to get started
+    sleep 60
+fi
+
+datetime=`date --utc '+%Y%m%dT%H%M%SZ'`
+URL="http://mosaic-data.lancs.ac.uk/log_ip?ip=${ip}&hostname=${hostname}&time=${datetime}"
+if [ -n "$action" ]; then
+    URL="${URL}&action=${action}"
+fi
+wget -q "$URL" -O /dev/null 
+
+exit $?
