@@ -32,6 +32,6 @@ OZONE_DATA_DIR=/home/ozone/data
 57 9 * * * /home/ozone/mosaic/ozone_test/delete_old_ozo_files.sh > ~/delete_old_ozo_files.out 2>&1
 
 # Log IP address, time, hostname etc to remote server
-@reboot log_ip reboot > /dev/null 2>&1
-@hourly log_ip > /dev/null 2>&1
+@reboot /home/ozone/mosaic/ozone_test/log_ip reboot > /dev/null 2>&1
+@hourly /home/ozone/mosaic/ozone_test/log_ip > /dev/null 2>&1
 
