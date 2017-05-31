@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import logging
-import numpy as np
 import os
 import subprocess
 import sys
@@ -13,13 +12,11 @@ logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
     # Parse command line arguments
-    now64 = np.datetime64('now', 's')
     progname = os.path.basename(sys.argv[0]).partition('.')[0]
-    default_config_file = os.path.join(os.path.sep, 'etc', 'camera.ini')
 
     remote_host = 'awn-data'
 
-    parser = argparse.ArgumentParser(description='Transfer camera images')
+    parser = argparse.ArgumentParser(description='Transfer MOSAIC data')
     parser.add_argument('--log-level',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
@@ -29,20 +26,17 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--dry-run',
                         action='store_true',
                         help='Dry run')
-    parser.add_argument('--local-directory',
-                        default='/home/ozone/data',
-                        help='Local directory for rsync')
     parser.add_argument('--remote-directory',
                         default='',
                         help='Remote directory for rsync')
     # For --remote-host it is assumed that the .ssh/config file will
     # define an entry for mosaic-data.
     parser.add_argument('--remote-host',
-                        default='mosaic-data',
+                        default='mosaic-data-mit',
                         help='Remote host for rsync')
-    parser.add_argument('--remove-source-files',
-                        action='store_true',
-                        help='Remove source files')
+    #parser.add_argument('--remove-source-files',
+    #                    action='store_true',
+    #                    help='Remove source files')
     parser.add_argument('-v', '--verbose',
                         action='append_const',
                         const='-v',
@@ -55,21 +49,60 @@ if __name__ == '__main__':
 
     # Get station number
     spec_file = '/home/ozone/mosaic/ozone_test/ozonespec.conf'
-    #if not os.path.exists(spec_file):
-    #    raise Exception('missing ' + spec_file)
 
     vrstnum = None
-    with open(spec_file) as fh:
-        for s in fh.readlines():
-            print(s)
+    spec = {'DONGLE': []}
+    try:
+        with open(spec_file) as fh:
+            for s in fh.readlines():
+                a = s.strip().split()
+                if len(a) == 0:
+                    continue
+
+                if a[0].startswith('#'):
+                    continue
+                if a[0] == 'DONGLE':
+                    spec[a[0]].append(a[1])
+                else:
+                    spec[a[0]] = ' '.join(a[1:])
+        logger.debug(spec)
         
-    rsync = ['rsync']
+    except:
+        logger.exception('Could not open spec file')
+        raise
+    
+    # Generate clock file
+    try:
+        cmd = ['/usr/bin/ntpq', '-p', '-n']
+        clock_filename = os.path.join(spec['DATADIR'],
+                                      'clock' + spec['VSRTNUM'])
+        with open(clock_filename, 'w') as f:
+            subprocess.check_call(cmd, stdout=f)
+    except:
+        logger.exception('Could not create clock file')
+
+    rsync = ['rsync', '-a']
         
     if args.verbose:
         rsync.extend(args.verbose)
 
     if args.dry_run:
         rsync.append('--dry-run')
+
+
+    rsync.append(spec['DATADIR'] + '/*' + spec['VSRTNUM'] + '.ozo')  
+    rsync.append(clock_filename)
+
+    # Define remote location for transfer
+    rsync.append(args.remote_host + ':' + args.remote_directory)
+    
+    if args.verbose:
+        print(' '.join(rsync))
+
+    try:
+        subprocess.check_call(' '.join(rsync), shell=True)
+    except:
+        logger.exception('Could not rsync data files (%s)', ' '.join(rsync))
         
     # t = st
     # while t < et:
