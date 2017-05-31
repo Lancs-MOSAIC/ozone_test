@@ -35,3 +35,5 @@ OZONE_DATA_DIR=/home/ozone/data
 @reboot /home/ozone/mosaic/ozone_test/log_ip reboot > /dev/null 2>&1
 @hourly /home/ozone/mosaic/ozone_test/log_ip > /dev/null 2>&1
 
+# Transfer data. Attempt 4 times every day.
+3 */6 * * * /home/ozone/mosaic/ozone_test/rsync_mosaic_data.py  > /dev/null 2>&1
