@@ -136,7 +136,9 @@ void write_file(struct rec_thread_context *ctx, uint64_t time_stamp,
     fprintf(stderr, "WARNING: could not write out sig spectra\n");
 
   fflush(fp);
-
+  if (fdatasync(fileno(fp))) {
+    perror("fdatasync()");
+  }
 }
 
 
