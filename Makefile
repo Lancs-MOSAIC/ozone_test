@@ -7,7 +7,7 @@ OBJS = ozonespec.o calcontrol.o rtldongle.o signalproc.o compthread.o \
 
 LDFLAGS=-lrtlsdr -lfftw3f -lm -lpthread -lrt
 
-all: ozonespec dtoverlay
+all: ozonespec dtoverlay gaincheck
 
 ozonespec: $(OBJS)
 
@@ -22,6 +22,9 @@ config.o: common.h
 
 
 dtoverlay: MOSAIC-cape-00A0.dtbo
+
+gaincheck: gaincheck.c common.h
+	$(CC) -o gaincheck gaincheck.c -lrtlsdr -lm $(CFLAGS)
 
 # Device tree overlays
 %.dtbo: %.dts
