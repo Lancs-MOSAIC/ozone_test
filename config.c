@@ -21,14 +21,78 @@ char station_name[MAX_STATION_NAME] = "Test";
 int watchdog_timeout = WATCHDOG_TIMEOUT;
 int keep_cal_on = 0;
 double line_freq = LINEFREQ;
+float dongle_gains[MAX_NUM_CHANNELS]; // gain in dB
+
+void parse_dongle_par(const char *par, const int chan_num)
+{
+  if (strlen(par) == 0) {
+    fprintf(stderr, "Warning: ignoring zero-length dongle parameter\n");
+    return;
+  }
+
+  char key[BUF_LEN], val[BUF_LEN];
+  int ret = sscanf(par, "%[^=]=%s", key, val);
+  if ((ret < 1) || (ret > 2)) {
+    fprintf(stderr, "Error: invalid dongle parameter format: %s\n", par);
+    return;
+  }
+
+  if (strcmp(key, "GAIN") == 0) {
+    if (ret != 2) {
+      fprintf(stderr, "Error: missing value for dongle gain. Ignoring.\n");
+      return;
+    }
+    dongle_gains[chan_num] = strtof(val, NULL);
+    fprintf(stderr, "parse_dongle_par: channel %d gain %f\n", chan_num, dongle_gains[chan_num]);
+  }
+}
+
+void parse_dongle(const char *val)
+{
+  // If a comma is present, extra parameters follow serial number
+  
+  char *comma_ptr = strchr(val, ',');
+  size_t sn_len = (comma_ptr == NULL) ? strlen(val) : (comma_ptr - val);
+
+  if (comma_ptr != NULL) {
+    *comma_ptr = '\0'; // replace with null
+  }
+
+  if (sn_len >= MAX_SN_LEN) {
+    fprintf(stderr, "ERROR: dongle serial number too long. Ignoring DONGLE statement.\n");
+    return;
+  } else if (sn_len == 0) {
+    fprintf(stderr, "ERROR: empty dongle serial number. Ignoring DONGLE statement.\n");
+    return;
+  }
+
+  strncpy(&dongle_sns[num_channels][0], val, MAX_SN_LEN);
+
+  // Defaults
+
+  dongle_gains[num_channels] = DEFAULT_DONGLE_GAIN;
+
+  // Process additional parameters
+
+  while (comma_ptr != NULL) {
+    const char *par = comma_ptr + 1;
+    char *next_comma = strchr(par, ',');
+    if (next_comma != NULL) {
+      *next_comma = '\0'; // replace with null
+    }
+    parse_dongle_par(par, num_channels);
+    comma_ptr = next_comma;
+  }
+
+  num_channels++;
+}
 
 void parse_config(char *key, char *val)
 {
 
   if (strcmp(key, "DONGLE") == 0) {
     if (num_channels < MAX_NUM_CHANNELS) {
-      strncpy(&dongle_sns[num_channels][0], val, MAX_SN_LEN);
-      num_channels++;
+      parse_dongle(val);
     }
     else {
       fprintf(stderr, "Too many channels defined!\n");

@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     strcpy(ctx->dongle_sn, &dongle_sns[n][0]);
 
     ctx->fft_win = fft_win;
-    ctx->dev = init_dongle(ctx->dongle_sn);
+    ctx->dev = init_dongle(n);
     if (ctx->dev == NULL) {
       fprintf(stderr, "Failed to init dongle %s\n", ctx->dongle_sn);
       return 1;

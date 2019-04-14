@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 int set_frequency(rtlsdr_dev_t *dev, uint32_t freq);
-rtlsdr_dev_t *init_dongle(char *sernum);
+rtlsdr_dev_t *init_dongle(int chan_num);
 
 #endif /* _RTLDONGLE_H */
 

@@ -14,6 +14,8 @@
 
 #define MAX_NUM_CHANNELS 8
 
+#define DEFAULT_DONGLE_GAIN 49.6 /* default dongle gain in dB */
+
 /* Realtime scheduling priorities */
 
 #define RT_PRIO_MAIN 50 /* used by main thread, which has the watchdog */

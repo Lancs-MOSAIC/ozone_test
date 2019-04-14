@@ -13,7 +13,7 @@ ozonespec: $(OBJS)
 
 calcontrol.o: calcontrol.h
 ozonespec.o: calcontrol.h signalproc.h recthread.h rtldongle.h config.h common.h
-rtldongle.o: rtldongle.h common.h
+rtldongle.o: rtldongle.h common.h config.h
 signalproc.o: signalproc.h common.h
 compthread.o: compthread.h signalproc.h common.h
 recthread.o: recthread.h compthread.h rtldongle.h signalproc.h calcontrol.h \

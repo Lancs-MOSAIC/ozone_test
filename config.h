@@ -14,6 +14,7 @@ extern char station_name[MAX_STATION_NAME];
 extern int watchdog_timeout;
 extern int keep_cal_on;
 extern double line_freq;
+extern float dongle_gains[MAX_NUM_CHANNELS];
 
 int read_config(char *conf_file);
 

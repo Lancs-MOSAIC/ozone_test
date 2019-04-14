@@ -4,6 +4,7 @@
 
 #include "rtldongle.h"
 #include "common.h"
+#include "config.h"
 #include <stdio.h>
 
 int dongle_debug = 1;
@@ -27,10 +28,10 @@ int set_frequency(rtlsdr_dev_t *dev, uint32_t freq)
  
 }
 
-rtlsdr_dev_t *init_dongle(char *sernum)
+rtlsdr_dev_t *init_dongle(int chan_num)
 {
     int r;
-    int gain = 496;
+    int gain = (int)(DEFAULT_DONGLE_GAIN * 10);
 
     uint32_t dev_index = 0;
     uint32_t frequency = 1320100000;
@@ -38,10 +39,10 @@ rtlsdr_dev_t *init_dongle(char *sernum)
 
     rtlsdr_dev_t *dev = NULL;
 
-    dev_index = rtlsdr_get_index_by_serial(sernum);
+    dev_index = rtlsdr_get_index_by_serial(dongle_sns[chan_num]);
 
     if (dongle_debug)
-      fprintf(stderr, "Using device %d: %s\n", dev_index, \
+      fprintf(stderr, "Channel %d: using device %d: %s\n", chan_num, dev_index, \
 	      rtlsdr_get_device_name(dev_index));
 
     r = rtlsdr_open(&dev, dev_index);
@@ -57,6 +58,8 @@ rtlsdr_dev_t *init_dongle(char *sernum)
 
     /* Set the frequency */
     set_frequency(dev, frequency);
+
+    gain = (int)(dongle_gains[chan_num] * 10);
 
     if (0 == gain) {
         /* Enable automatic gain */
@@ -75,8 +78,8 @@ rtlsdr_dev_t *init_dongle(char *sernum)
             fprintf(stderr, "WARNING: Failed to set tuner gain.\n");
         else {
             if (dongle_debug)
-	      fprintf(stderr, "Tuner gain set to %f dB.\n", gain / 10.0);
-	}
+	            fprintf(stderr, "Channel %d: tuner gain set to %f dB.\n", chan_num, gain / 10.0);
+	      }
     }
 
     r = rtlsdr_reset_buffer(dev);
